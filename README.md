@@ -1,2 +1,2 @@
 # zero
-Golang http server with ZERO external libs
+Golang http server with ZERO external libs dependency
