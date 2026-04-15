@@ -1,7 +1,6 @@
 package middlewares
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,13 +15,15 @@ func TestCORS(t *testing.T) {
 		method         string
 		origin         string
 		expectedOrigin string
+		expectHeaders  bool // whether Allow-Methods/Allow-Headers should be set
 	}{
 		{
 			name:           "wildcard origin",
 			allowedOrigins: []string{"*"},
 			method:         "GET",
 			origin:         "https://example.com",
-			expectedOrigin: "https://example.com",
+			expectedOrigin: "*",
+			expectHeaders:  true,
 		},
 		{
 			name:           "specific origin allowed",
@@ -30,6 +31,7 @@ func TestCORS(t *testing.T) {
 			method:         "GET",
 			origin:         "https://example.com",
 			expectedOrigin: "https://example.com",
+			expectHeaders:  true,
 		},
 		{
 			name:           "specific origin not allowed",
@@ -37,6 +39,7 @@ func TestCORS(t *testing.T) {
 			method:         "GET",
 			origin:         "https://malicious.com",
 			expectedOrigin: "",
+			expectHeaders:  false,
 		},
 		{
 			name:           "no origin header",
@@ -44,20 +47,18 @@ func TestCORS(t *testing.T) {
 			method:         "GET",
 			origin:         "",
 			expectedOrigin: "",
+			expectHeaders:  false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a simple handler
-			handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+			handler := func(w http.ResponseWriter, r *http.Request) {
 				response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
 			}
 
-			// Apply CORS middleware
 			corsHandler := CORS(tt.allowedOrigins)(handler)
 
-			// Create test request
 			req, err := http.NewRequest(tt.method, "/test", nil)
 			if err != nil {
 				t.Fatal(err)
@@ -67,30 +68,30 @@ func TestCORS(t *testing.T) {
 				req.Header.Set("Origin", tt.origin)
 			}
 
-			// Create response recorder
 			w := httptest.NewRecorder()
+			corsHandler(w, req)
 
-			// Call the handler
-			corsHandler(context.Background(), w, req)
-
-			// Check CORS headers
 			accessControlOrigin := w.Header().Get("Access-Control-Allow-Origin")
 			if accessControlOrigin != tt.expectedOrigin {
-				t.Errorf("Expected Access-Control-Allow-Origin %s, got %s", tt.expectedOrigin, accessControlOrigin)
+				t.Errorf("Expected Access-Control-Allow-Origin %q, got %q", tt.expectedOrigin, accessControlOrigin)
 			}
 
-			// Check other CORS headers
-			accessControlMethods := w.Header().Get("Access-Control-Allow-Methods")
-			if accessControlMethods == "" {
+			hasMethods := w.Header().Get("Access-Control-Allow-Methods") != ""
+			hasHeaders := w.Header().Get("Access-Control-Allow-Headers") != ""
+
+			if tt.expectHeaders && !hasMethods {
 				t.Error("Access-Control-Allow-Methods header not set")
 			}
-
-			accessControlHeaders := w.Header().Get("Access-Control-Allow-Headers")
-			if accessControlHeaders == "" {
+			if tt.expectHeaders && !hasHeaders {
 				t.Error("Access-Control-Allow-Headers header not set")
 			}
+			if !tt.expectHeaders && hasMethods {
+				t.Error("Access-Control-Allow-Methods should not be set for unmatched origin")
+			}
+			if !tt.expectHeaders && hasHeaders {
+				t.Error("Access-Control-Allow-Headers should not be set for unmatched origin")
+			}
 
-			// Check response status
 			if w.Code != http.StatusOK {
 				t.Errorf("Expected status 200, got %d", w.Code)
 			}
@@ -98,16 +99,63 @@ func TestCORS(t *testing.T) {
 	}
 }
 
-func TestCORSWithPreflight(t *testing.T) {
-	// Create a simple handler
-	handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+func TestCORSCredentialsOnlyForExplicitOrigins(t *testing.T) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
-	// Apply CORS middleware
+	// Wildcard should NOT set credentials
+	corsHandler := CORS([]string{"*"})(handler)
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.Header.Set("Origin", "https://example.com")
+	w := httptest.NewRecorder()
+	corsHandler(w, req)
+
+	if creds := w.Header().Get("Access-Control-Allow-Credentials"); creds != "" {
+		t.Errorf("Wildcard CORS should not set credentials, got %q", creds)
+	}
+
+	// Explicit origin SHOULD set credentials
+	corsHandler2 := CORS([]string{"https://example.com"})(handler)
+	req2, _ := http.NewRequest("GET", "/test", nil)
+	req2.Header.Set("Origin", "https://example.com")
+	w2 := httptest.NewRecorder()
+	corsHandler2(w2, req2)
+
+	if creds := w2.Header().Get("Access-Control-Allow-Credentials"); creds != "true" {
+		t.Errorf("Explicit CORS should set credentials, got %q", creds)
+	}
+
+	if vary := w2.Header().Get("Vary"); vary != "Origin" {
+		t.Errorf("Explicit CORS should set Vary: Origin, got %q", vary)
+	}
+}
+
+func TestCORSMaxAge(t *testing.T) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
+	}
+
 	corsHandler := CORS([]string{"https://example.com"})(handler)
 
-	// Create preflight request
+	req, _ := http.NewRequest("OPTIONS", "/test", nil)
+	req.Header.Set("Origin", "https://example.com")
+	w := httptest.NewRecorder()
+	corsHandler(w, req)
+
+	maxAge := w.Header().Get("Access-Control-Max-Age")
+	if maxAge != "600" {
+		t.Errorf("Expected Access-Control-Max-Age 600, got %q", maxAge)
+	}
+}
+
+func TestCORSWithPreflight(t *testing.T) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
+	}
+
+	corsHandler := CORS([]string{"https://example.com"})(handler)
+
 	req, err := http.NewRequest("OPTIONS", "/test", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -116,36 +164,28 @@ func TestCORSWithPreflight(t *testing.T) {
 	req.Header.Set("Access-Control-Request-Method", "POST")
 	req.Header.Set("Access-Control-Request-Headers", "Content-Type")
 
-	// Create response recorder
 	w := httptest.NewRecorder()
+	corsHandler(w, req)
 
-	// Call the handler
-	corsHandler(context.Background(), w, req)
-
-	// Check preflight response
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status 200 for preflight, got %d", w.Code)
+	if w.Code != http.StatusNoContent {
+		t.Errorf("Expected status 204 for preflight, got %d", w.Code)
 	}
 
-	// Check CORS headers
-	accessControlOrigin := w.Header().Get("Access-Control-Allow-Origin")
-	if accessControlOrigin != "https://example.com" {
-		t.Errorf("Expected Access-Control-Allow-Origin https://example.com, got %s", accessControlOrigin)
+	if origin := w.Header().Get("Access-Control-Allow-Origin"); origin != "https://example.com" {
+		t.Errorf("Expected Access-Control-Allow-Origin https://example.com, got %s", origin)
 	}
 
-	accessControlMethods := w.Header().Get("Access-Control-Allow-Methods")
-	if accessControlMethods == "" {
+	if methods := w.Header().Get("Access-Control-Allow-Methods"); methods == "" {
 		t.Error("Access-Control-Allow-Methods header not set")
 	}
 
-	accessControlHeaders := w.Header().Get("Access-Control-Allow-Headers")
-	if accessControlHeaders == "" {
+	if headers := w.Header().Get("Access-Control-Allow-Headers"); headers == "" {
 		t.Error("Access-Control-Allow-Headers header not set")
 	}
 }
 
 func BenchmarkCORS(b *testing.B) {
-	handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
@@ -157,6 +197,6 @@ func BenchmarkCORS(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		w := httptest.NewRecorder()
-		corsHandler(context.Background(), w, req)
+		corsHandler(w, req)
 	}
 }

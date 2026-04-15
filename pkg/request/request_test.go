@@ -8,32 +8,24 @@ import (
 func TestGetPathParam(t *testing.T) {
 	tests := []struct {
 		name     string
-		path     string
 		key      string
+		value    string
 		expected string
 	}{
-		{
-			name:     "existing path param",
-			path:     "/users/123",
-			key:      "id",
-			expected: "", // Path parameters require Go 1.22+ and proper setup
-		},
-		{
-			name:     "non-existing path param",
-			path:     "/users/123",
-			key:      "name",
-			expected: "",
-		},
+		{"existing path param", "id", "123", "123"},
+		{"empty value returns empty", "id", "", ""},
+		{"non-existing param", "name", "", ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, _ := http.NewRequest("GET", tt.path, nil)
-			// Note: This test would need proper path parameter setup
-			// which requires Go 1.22+ path parameter support
+			req, _ := http.NewRequest("GET", "/test", nil)
+			if tt.value != "" {
+				req.SetPathValue(tt.key, tt.value)
+			}
 			got := GetPathParam(req, tt.key)
 			if got != tt.expected {
-				t.Errorf("GetPathParam() = %v, want %v", got, tt.expected)
+				t.Errorf("GetPathParam() = %q, want %q", got, tt.expected)
 			}
 		})
 	}
@@ -80,40 +72,24 @@ func TestGetQueryParam(t *testing.T) {
 func TestGetPathParamOrDefault(t *testing.T) {
 	tests := []struct {
 		name         string
-		path         string
 		key          string
+		value        string
 		defaultValue string
 		expected     string
 	}{
-		{
-			name:         "existing path param",
-			path:         "/users/123",
-			key:          "id",
-			defaultValue: "default",
-			expected:     "default", // Path parameters require Go 1.22+ and proper setup
-		},
-		{
-			name:         "non-existing path param",
-			path:         "/users/123",
-			key:          "name",
-			defaultValue: "default",
-			expected:     "default",
-		},
-		{
-			name:         "empty path param value",
-			path:         "/users/",
-			key:          "id",
-			defaultValue: "default",
-			expected:     "default", // Empty path value should return default
-		},
+		{"existing param returns value", "id", "456", "default", "456"},
+		{"missing param returns default", "name", "", "default", "default"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, _ := http.NewRequest("GET", tt.path, nil)
+			req, _ := http.NewRequest("GET", "/test", nil)
+			if tt.value != "" {
+				req.SetPathValue(tt.key, tt.value)
+			}
 			got := GetPathParamOrDefault(req, tt.key, tt.defaultValue)
 			if got != tt.expected {
-				t.Errorf("GetPathParamOrDefault() = %v, want %v", got, tt.expected)
+				t.Errorf("GetPathParamOrDefault() = %q, want %q", got, tt.expected)
 			}
 		})
 	}

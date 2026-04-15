@@ -11,27 +11,27 @@ func TestWriteJSON(t *testing.T) {
 	tests := []struct {
 		name       string
 		statusCode int
-		data       interface{}
-		expected   map[string]interface{}
+		data       any
+		expected   map[string]any
 	}{
 		{
 			name:       "simple object",
 			statusCode: http.StatusOK,
 			data:       map[string]string{"message": "hello"},
-			expected:   map[string]interface{}{"message": "hello"},
+			expected:   map[string]any{"message": "hello"},
 		},
 		{
 			name:       "complex object",
 			statusCode: http.StatusCreated,
-			data: map[string]interface{}{
+			data: map[string]any{
 				"id":   1,
 				"name": "test",
 				"tags": []string{"tag1", "tag2"},
 			},
-			expected: map[string]interface{}{
+			expected: map[string]any{
 				"id":   float64(1),
 				"name": "test",
-				"tags": []interface{}{"tag1", "tag2"},
+				"tags": []any{"tag1", "tag2"},
 			},
 		},
 	}
@@ -53,7 +53,7 @@ func TestWriteJSON(t *testing.T) {
 			}
 
 			// Check response body
-			var got map[string]interface{}
+			var got map[string]any
 			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 				t.Errorf("WriteJSON() response is not valid JSON: %v", err)
 			}
@@ -154,10 +154,10 @@ func TestInternalServerError(t *testing.T) {
 			t.Errorf("InternalServerError() status code = %v, want %v", w.Code, http.StatusInternalServerError)
 		}
 
-		// The actual error message includes "http: " prefix
-		expected := "internal server error: http: Server closed\n"
+		// Should return generic message, not the underlying error
+		expected := "internal server error\n"
 		if w.Body.String() != expected {
-			t.Errorf("InternalServerError() body = %v, want %v", w.Body.String(), expected)
+			t.Errorf("InternalServerError() body = %q, want %q", w.Body.String(), expected)
 		}
 	})
 }

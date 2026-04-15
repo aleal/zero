@@ -2,271 +2,276 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/aleal/zero/pkg/config"
-	"github.com/aleal/zero/pkg/request"
 	"github.com/aleal/zero/pkg/response"
 )
 
 func TestNewServer(t *testing.T) {
-	ctx := context.Background()
-	server := NewServer(ctx)
-
+	server := New(context.Background())
 	if server == nil {
-		t.Error("NewServer() returned nil")
+		t.Error("New() returned nil")
 	}
 }
 
 func TestNewServerWithConfig(t *testing.T) {
-	ctx := context.Background()
-	cfg := config.Default()
-	cfg.SetHost("localhost")
-	cfg.SetPort(8080)
+	cfg := config.Load()
+	cfg.SetHost("0.0.0.0")
+	cfg.SetPort(9090)
 
-	server := NewServerWithConfig(ctx, cfg)
-
+	server := New(context.Background(), WithConfig(cfg))
 	if server == nil {
-		t.Error("NewServerWithConfig() returned nil")
+		t.Error("New(WithConfig) returned nil")
 	}
 }
 
-func TestNewServerWithNilConfig(t *testing.T) {
-	ctx := context.Background()
-	server := NewServerWithConfig(ctx, nil)
+func TestNewServerWithBadEnv(t *testing.T) {
+	t.Setenv("ZERO_PORT", "not-a-number")
 
+	server := New(context.Background())
 	if server == nil {
-		t.Error("NewServerWithConfig() with nil config returned nil")
+		t.Error("New() should return server even with bad env")
 	}
 }
 
-func TestServerMethods(t *testing.T) {
-	ctx := context.Background()
-	cfg := config.Default()
-	server := NewServerWithConfig(ctx, cfg)
+// --- HTTP round-trip tests ---
 
-	// Test that we can register handlers
-	server.Get("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "test"})
+func TestMethodRouterRoundTrip(t *testing.T) {
+	srv := New(context.Background())
+	srv.Get("/items", func(w http.ResponseWriter, r *http.Request) {
+		response.WriteJSON(w, http.StatusOK, map[string]string{"action": "list"})
+	})
+	srv.Post("/items", func(w http.ResponseWriter, r *http.Request) {
+		response.WriteJSON(w, http.StatusCreated, map[string]string{"action": "create"})
 	})
 
-	server.Post("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusCreated, map[string]string{"message": "created"})
-	})
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
 
-	server.Put("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "updated"})
-	})
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		wantStatus int
+	}{
+		{"GET registered", http.MethodGet, "/items", http.StatusOK},
+		{"POST registered", http.MethodPost, "/items", http.StatusCreated},
+		{"PUT not registered returns 405", http.MethodPut, "/items", http.StatusMethodNotAllowed},
+		{"DELETE not registered returns 405", http.MethodDelete, "/items", http.StatusMethodNotAllowed},
+	}
 
-	server.Delete("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
-	})
-
-	server.Patch("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "patched"})
-	})
-
-	// Test that we can add middlewares
-	server.Middlewares(func(next request.Handler) request.Handler {
-		return func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-			next(rctx, w, r)
-		}
-	})
-}
-
-func TestServerHandleMethod(t *testing.T) {
-	ctx := context.Background()
-	cfg := config.Default()
-	server := NewServerWithConfig(ctx, cfg)
-
-	// Test the Handle method directly
-	server.Handle("/custom", "CUSTOM", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "custom"})
-	})
-}
-
-func TestServerPatternNormalization(t *testing.T) {
-	ctx := context.Background()
-	cfg := config.Default()
-	server := NewServerWithConfig(ctx, cfg)
-
-	// Test that patterns are normalized
-	server.Get("test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "test"})
-	})
-
-	server.Get("/another-test/", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "another-test"})
-	})
-
-	// Test that we can register multiple handlers for the same pattern
-	server.Get("/multi", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "first"})
-	})
-
-	server.Post("/multi", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusCreated, map[string]string{"message": "second"})
-	})
-}
-
-func TestServerMethodNotAllowed(t *testing.T) {
-	ctx := context.Background()
-	cfg := config.Default()
-	server := NewServerWithConfig(ctx, cfg)
-
-	// Register only GET handler
-	server.Get("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "test"})
-	})
-
-	// Test that we can register handlers for different methods
-	server.Post("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusCreated, map[string]string{"message": "created"})
-	})
-
-	server.Put("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "updated"})
-	})
-
-	server.Delete("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
-	})
-
-	server.Patch("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "patched"})
-	})
-}
-
-func TestServerWithMultipleMiddlewares(t *testing.T) {
-	ctx := context.Background()
-	cfg := config.Default()
-	server := NewServerWithConfig(ctx, cfg)
-
-	// Add multiple middlewares
-	server.Middlewares(
-		func(next request.Handler) request.Handler {
-			return func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("X-Middleware-1", "true")
-				next(rctx, w, r)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := http.NewRequest(tt.method, ts.URL+tt.path, nil)
+			if err != nil {
+				t.Fatalf("NewRequest: %v", err)
 			}
-		},
-		func(next request.Handler) request.Handler {
-			return func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("X-Middleware-2", "true")
-				next(rctx, w, r)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("Do: %v", err)
 			}
-		},
-	)
-
-	// Register a handler
-	server.Get("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "test"})
-	})
+			defer resp.Body.Close()
+			if resp.StatusCode != tt.wantStatus {
+				t.Errorf("status = %d, want %d", resp.StatusCode, tt.wantStatus)
+			}
+		})
+	}
 }
 
-func TestServerStartMethod(t *testing.T) {
-	ctx := context.Background()
-	cfg := config.Default()
-	server := NewServerWithConfig(ctx, cfg)
-
-	// Register a simple handler
-	server.Get("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "test"})
+func TestMethodNotAllowedHasAllowHeader(t *testing.T) {
+	srv := New(context.Background())
+	srv.Get("/resource", func(w http.ResponseWriter, r *http.Request) {
+		response.WriteJSON(w, http.StatusOK, nil)
+	})
+	srv.Post("/resource", func(w http.ResponseWriter, r *http.Request) {
+		response.WriteJSON(w, http.StatusCreated, nil)
 	})
 
-	// Test that Start method can be called without panicking
-	// Note: We can't easily test the full Start method as it blocks indefinitely
-	// But we can test that it doesn't panic immediately
-	go func() {
-		// This will block, but we can test that it starts without error
-		server.Start()
-	}()
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
 
-	// Give it a moment to start
-	time.Sleep(100 * time.Millisecond)
+	req, _ := http.NewRequest(http.MethodPatch, ts.URL+"/resource", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	defer resp.Body.Close()
 
-	// Note: We can't easily shutdown the server through the interface
-	// The Start method is designed to run indefinitely until interrupted
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", resp.StatusCode)
+	}
+	if allow := resp.Header.Get("Allow"); allow == "" {
+		t.Error("Allow header is empty on 405 response")
+	}
 }
 
-func TestServerMethodRouterBehavior(t *testing.T) {
-	ctx := context.Background()
-	cfg := config.Default()
-	server := NewServerWithConfig(ctx, cfg)
+func TestHandlerReturnsWorkingMux(t *testing.T) {
+	srv := New(context.Background())
+	srv.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+		response.WriteJSON(w, http.StatusOK, map[string]string{"pong": "true"})
+	})
 
-	// Test that we can register multiple handlers for the same pattern
-	server.Get("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestHealthCheckEndpoint(t *testing.T) {
+	srv := New(context.Background())
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/health")
+	if err != nil {
+		t.Fatalf("GET /health: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestShutdown(t *testing.T) {
+	srv := New(context.Background(), WithPort(0))
+
+	z := srv.(*zero)
+	ln, err := net.Listen("tcp", z.Server.Addr)
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+
+	go z.Server.Serve(ln)
+
+	resp, err := http.Get("http://" + ln.Addr().String() + "/health")
+	if err != nil {
+		t.Fatalf("GET /health: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+
+	_, err = http.Get("http://" + ln.Addr().String() + "/health")
+	if err == nil {
+		t.Error("expected connection error after shutdown")
+	}
+}
+
+func TestMultipleMethodsSamePattern(t *testing.T) {
+	srv := New(context.Background())
+	srv.Get("/api/data", func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"method": "GET"})
 	})
-
-	server.Post("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	srv.Post("/api/data", func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusCreated, map[string]string{"method": "POST"})
 	})
-
-	server.Put("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	srv.Put("/api/data", func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"method": "PUT"})
 	})
-
-	// Test that we can register handlers for different patterns
-	server.Get("/another", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"pattern": "another"})
+	srv.Delete("/api/data", func(w http.ResponseWriter, r *http.Request) {
+		response.WriteJSON(w, http.StatusNoContent, nil)
+	})
+	srv.Patch("/api/data", func(w http.ResponseWriter, r *http.Request) {
+		response.WriteJSON(w, http.StatusOK, map[string]string{"method": "PATCH"})
 	})
 
-	// Test that we can register custom methods
-	server.Handle("/custom", "CUSTOM", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	methods := map[string]int{
+		http.MethodGet:    http.StatusOK,
+		http.MethodPost:   http.StatusCreated,
+		http.MethodPut:    http.StatusOK,
+		http.MethodDelete: http.StatusNoContent,
+		http.MethodPatch:  http.StatusOK,
+	}
+	for method, wantStatus := range methods {
+		t.Run(method, func(t *testing.T) {
+			req, _ := http.NewRequest(method, ts.URL+"/api/data", nil)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("Do: %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != wantStatus {
+				t.Errorf("status = %d, want %d", resp.StatusCode, wantStatus)
+			}
+		})
+	}
+}
+
+func TestCustomHandleMethod(t *testing.T) {
+	srv := New(context.Background())
+	srv.Handle("/custom", "CUSTOM", func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"method": "CUSTOM"})
 	})
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	req, _ := http.NewRequest("CUSTOM", ts.URL+"/custom", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
 }
 
-func TestServerMethodNotAllowedBehavior(t *testing.T) {
-	ctx := context.Background()
-	cfg := config.Default()
-	server := NewServerWithConfig(ctx, cfg)
-
-	// Test that we can register handlers for different methods
-	// The methodNotAllowed function is tested indirectly through the router behavior
-	server.Get("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"method": "GET"})
+func TestPatternNormalization(t *testing.T) {
+	srv := New(context.Background())
+	srv.Get("no-leading-slash", func(w http.ResponseWriter, r *http.Request) {
+		response.WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 	})
 
-	server.Post("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusCreated, map[string]string{"method": "POST"})
-	})
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
 
-	// Test that we can register handlers for different patterns
-	server.Get("/another", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"pattern": "another"})
-	})
+	resp, err := http.Get(ts.URL + "/no-leading-slash")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
 }
 
-// func BenchmarkServerCreation(b *testing.B) {
-// 	ctx := context.Background()
-// 	for i := 0; i < b.N; i++ {
-// 		NewServer(ctx)
-// 	}
-// }
-
-func BenchmarkServerWithConfigCreation(b *testing.B) {
-	ctx := context.Background()
-	cfg := config.Default()
+func BenchmarkServerCreation(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		NewServerWithConfig(ctx, cfg)
+		New(context.Background())
 	}
 }
 
 func BenchmarkServerMethodRegistration(b *testing.B) {
-	ctx := context.Background()
-	cfg := config.Default()
-	server := NewServerWithConfig(ctx, cfg)
+	server := New(context.Background())
 
-	handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "test"})
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		server.Get("/test", handler)
+		server.Get(fmt.Sprintf("/test-%d", i), handler)
 	}
 }

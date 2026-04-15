@@ -3,19 +3,28 @@ package parser
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
+	"io"
 	"strconv"
 	"strings"
+	"time"
 )
 
-// ParseJSONBody parses JSON from request body
-func ParseJSONBody(r *http.Request, v any) error {
-	return json.NewDecoder(r.Body).Decode(v)
+// DefaultMaxJSONBodySize is the default maximum JSON body size (1 MB)
+const DefaultMaxJSONBodySize int64 = 1 << 20
+
+// ParseJSONBody parses JSON from a reader with a size limit.
+// Pass 0 to use the default limit (1 MB). The caller owns closing the reader.
+func ParseJSONBody(body io.Reader, v any, maxSize ...int64) error {
+	limit := DefaultMaxJSONBodySize
+	if len(maxSize) > 0 && maxSize[0] > 0 {
+		limit = maxSize[0]
+	}
+	return json.NewDecoder(io.LimitReader(body, limit)).Decode(v)
 }
 
 // ParseType defines the types that can be parsed from string values
 type ParseType interface {
-	int | int32 | int64 | float32 | float64 | bool | string
+	int | int32 | int64 | float32 | float64 | bool | string | time.Duration
 }
 
 // SanitizeString removes potentially dangerous characters
@@ -73,6 +82,12 @@ func ParseString[T ParseType](valueStr string, target *T) error {
 		*target = any(bool(val)).(T) // val is already bool, so direct type assertion is safe.
 	case string:
 		*target = any(valueStr).(T)
+	case time.Duration:
+		val, err := time.ParseDuration(valueStr)
+		if err != nil {
+			return fmt.Errorf("failed to parse '%s' as time.Duration: %w", valueStr, err)
+		}
+		*target = any(val).(T) // val is already time.Duration, so direct type assertion is safe.
 	default:
 		return fmt.Errorf("unsupported type: %T", *target)
 	}

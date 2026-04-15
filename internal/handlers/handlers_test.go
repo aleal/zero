@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -22,7 +21,7 @@ func TestHealthCheckHandler(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Call the handler
-	handler(context.Background(), w, req)
+	handler(w, req)
 
 	// Check response status
 	if w.Code != http.StatusOK {
@@ -36,7 +35,7 @@ func TestHealthCheckHandler(t *testing.T) {
 	}
 
 	// Check response body
-	var response map[string]interface{}
+	var response map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatal(err)
 	}
@@ -46,8 +45,8 @@ func TestHealthCheckHandler(t *testing.T) {
 		t.Errorf("Expected service 'zero', got %s", response["service"])
 	}
 
-	if response["version"] != "0.0.1" {
-		t.Errorf("Expected version '0.0.1', got %s", response["version"])
+	if v, ok := response["version"].(string); !ok || v == "" {
+		t.Errorf("Expected version to be a non-empty string, got %v", response["version"])
 	}
 
 	// Check that uptime is present and is a string
@@ -69,7 +68,7 @@ func TestHealthCheckHandlerWithDifferentMethods(t *testing.T) {
 			}
 
 			w := httptest.NewRecorder()
-			handler(context.Background(), w, req)
+			handler(w, req)
 
 			// Health check should work with any method
 			if w.Code != http.StatusOK {
@@ -86,6 +85,6 @@ func BenchmarkHealthCheckHandler(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		w := httptest.NewRecorder()
-		handler(context.Background(), w, req)
+		handler(w, req)
 	}
 }

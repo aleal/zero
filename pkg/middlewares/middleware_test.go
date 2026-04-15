@@ -1,7 +1,6 @@
 package middlewares
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,23 +11,23 @@ import (
 
 func TestChain(t *testing.T) {
 	// Create a simple handler
-	handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	// Create middleware that adds a header
 	middleware1 := func(next request.Handler) request.Handler {
-		return func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+		return func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-Middleware-1", "true")
-			next(rctx, w, r)
+			next(w, r)
 		}
 	}
 
 	// Create middleware that adds another header
 	middleware2 := func(next request.Handler) request.Handler {
-		return func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+		return func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-Middleware-2", "true")
-			next(rctx, w, r)
+			next(w, r)
 		}
 	}
 
@@ -45,7 +44,7 @@ func TestChain(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Call the chained handler
-	chainedHandler(context.Background(), w, req)
+	chainedHandler(w, req)
 
 	// Check that both middleware headers were added
 	if w.Header().Get("X-Middleware-1") != "true" {
@@ -64,7 +63,7 @@ func TestChain(t *testing.T) {
 
 func TestChainWithNoMiddlewares(t *testing.T) {
 	// Create a simple handler
-	handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
@@ -81,7 +80,7 @@ func TestChainWithNoMiddlewares(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Call the chained handler
-	chainedHandler(context.Background(), w, req)
+	chainedHandler(w, req)
 
 	// Check that the response was successful
 	if w.Code != http.StatusOK {
@@ -93,24 +92,24 @@ func TestChainOrder(t *testing.T) {
 	var executionOrder []string
 
 	// Create a handler that records execution
-	handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		executionOrder = append(executionOrder, "handler")
 		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	// Create middleware that records execution order
 	middleware1 := func(next request.Handler) request.Handler {
-		return func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+		return func(w http.ResponseWriter, r *http.Request) {
 			executionOrder = append(executionOrder, "middleware1-before")
-			next(rctx, w, r)
+			next(w, r)
 			executionOrder = append(executionOrder, "middleware1-after")
 		}
 	}
 
 	middleware2 := func(next request.Handler) request.Handler {
-		return func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+		return func(w http.ResponseWriter, r *http.Request) {
 			executionOrder = append(executionOrder, "middleware2-before")
-			next(rctx, w, r)
+			next(w, r)
 			executionOrder = append(executionOrder, "middleware2-after")
 		}
 	}
@@ -128,7 +127,7 @@ func TestChainOrder(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Call the chained handler
-	chainedHandler(context.Background(), w, req)
+	chainedHandler(w, req)
 
 	// Check execution order - middlewares are applied in reverse order
 	expectedOrder := []string{
@@ -152,13 +151,13 @@ func TestChainOrder(t *testing.T) {
 }
 
 func BenchmarkChain(b *testing.B) {
-	handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	middleware := func(next request.Handler) request.Handler {
-		return func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-			next(rctx, w, r)
+		return func(w http.ResponseWriter, r *http.Request) {
+			next(w, r)
 		}
 	}
 
@@ -168,6 +167,6 @@ func BenchmarkChain(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		chainedHandler := Chain(handler, middleware, middleware, middleware)
-		chainedHandler(context.Background(), w, req)
+		chainedHandler(w, req)
 	}
 }

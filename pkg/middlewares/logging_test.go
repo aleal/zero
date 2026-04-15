@@ -12,12 +12,12 @@ import (
 
 func TestLogging(t *testing.T) {
 	// Create a simple handler
-	handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	// Apply logging middleware
-	loggingHandler := Logging()(handler)
+	loggingHandler := Logging(log.NewLogger())(handler)
 
 	// Create test request
 	req, err := http.NewRequest("GET", "/test", nil)
@@ -29,12 +29,12 @@ func TestLogging(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Create context with logger
-	ctx := context.Background()
 	logger := log.NewLogger()
-	ctx = log.SetLoggerToContext(ctx, logger)
+	ctx := log.SetLoggerToContext(req.Context(), logger)
+	req = req.WithContext(ctx)
 
 	// Call the handler
-	loggingHandler(ctx, w, req)
+	loggingHandler(w, req)
 
 	// Check that the response was successful
 	if w.Code != http.StatusOK {
@@ -63,12 +63,12 @@ func TestLoggingWithDifferentStatusCodes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a handler that returns the specified status code
-			handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+			handler := func(w http.ResponseWriter, r *http.Request) {
 				response.WriteJSON(w, tt.statusCode, map[string]string{"status": tt.name})
 			}
 
 			// Apply logging middleware
-			loggingHandler := Logging()(handler)
+			loggingHandler := Logging(log.NewLogger())(handler)
 
 			// Create test request
 			req, err := http.NewRequest("GET", "/test", nil)
@@ -80,12 +80,12 @@ func TestLoggingWithDifferentStatusCodes(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			// Create context with logger
-			ctx := context.Background()
 			logger := log.NewLogger()
-			ctx = log.SetLoggerToContext(ctx, logger)
+			ctx := log.SetLoggerToContext(req.Context(), logger)
+			req = req.WithContext(ctx)
 
 			// Call the handler
-			loggingHandler(ctx, w, req)
+			loggingHandler(w, req)
 
 			// Check that the status code is correct
 			if w.Code != tt.statusCode {
@@ -101,12 +101,12 @@ func TestLoggingWithDifferentMethods(t *testing.T) {
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
 			// Create a simple handler
-			handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+			handler := func(w http.ResponseWriter, r *http.Request) {
 				response.WriteJSON(w, http.StatusOK, map[string]string{"method": method})
 			}
 
 			// Apply logging middleware
-			loggingHandler := Logging()(handler)
+			loggingHandler := Logging(log.NewLogger())(handler)
 
 			// Create test request
 			req, err := http.NewRequest(method, "/test", nil)
@@ -118,12 +118,12 @@ func TestLoggingWithDifferentMethods(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			// Create context with logger
-			ctx := context.Background()
 			logger := log.NewLogger()
-			ctx = log.SetLoggerToContext(ctx, logger)
+			ctx := log.SetLoggerToContext(req.Context(), logger)
+			req = req.WithContext(ctx)
 
 			// Call the handler
-			loggingHandler(ctx, w, req)
+			loggingHandler(w, req)
 
 			// Check that the response was successful
 			if w.Code != http.StatusOK {
@@ -134,11 +134,11 @@ func TestLoggingWithDifferentMethods(t *testing.T) {
 }
 
 func BenchmarkLogging(b *testing.B) {
-	handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
-	loggingHandler := Logging()(handler)
+	loggingHandler := Logging(log.NewLogger())(handler)
 	req, _ := http.NewRequest("GET", "/test", nil)
 
 	// Create context with logger
@@ -149,6 +149,6 @@ func BenchmarkLogging(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		w := httptest.NewRecorder()
-		loggingHandler(ctx, w, req)
+		loggingHandler(w, req)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/aleal/zero/pkg/log"
@@ -11,37 +12,27 @@ import (
 )
 
 func TestRecovery(t *testing.T) {
-	// Create a simple handler
-	handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
-	// Apply recovery middleware
 	recoveryHandler := Recovery()(handler)
 
-	// Create test request
 	req, err := http.NewRequest("GET", "/test", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Create response recorder
+	ctx := log.SetLoggerToContext(req.Context(), log.NewLogger())
+	req = req.WithContext(ctx)
+
 	w := httptest.NewRecorder()
+	recoveryHandler(w, req)
 
-	// Create context with logger
-	ctx := context.Background()
-	logger := log.NewLogger()
-	ctx = log.SetLoggerToContext(ctx, logger)
-
-	// Call the handler
-	recoveryHandler(ctx, w, req)
-
-	// Check that the response was successful
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 
-	// Check that the response body is correct
 	expectedBody := `{"message":"success"}`
 	if w.Body.String() != expectedBody {
 		t.Errorf("Expected body %s, got %s", expectedBody, w.Body.String())
@@ -49,89 +40,91 @@ func TestRecovery(t *testing.T) {
 }
 
 func TestRecoveryWithPanic(t *testing.T) {
-	// Create a handler that panics
-	handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		panic("test panic")
 	}
 
-	// Apply recovery middleware
 	recoveryHandler := Recovery()(handler)
 
-	// Create test request
 	req, err := http.NewRequest("GET", "/test", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Create response recorder
+	ctx := log.SetLoggerToContext(req.Context(), log.NewLogger())
+	req = req.WithContext(ctx)
+
 	w := httptest.NewRecorder()
+	recoveryHandler(w, req)
 
-	// Create context with logger
-	ctx := context.Background()
-	logger := log.NewLogger()
-	ctx = log.SetLoggerToContext(ctx, logger)
-
-	// Call the handler - this should not panic due to recovery middleware
-	recoveryHandler(ctx, w, req)
-
-	// Check that we got an internal server error
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("Expected status 500 after panic, got %d", w.Code)
 	}
 
-	// Check that we got an error response
-	if w.Body.String() == "" {
-		t.Error("Expected error response body, got empty")
+	// Should return generic message, not panic details
+	body := strings.TrimSpace(w.Body.String())
+	if body != "internal server error" {
+		t.Errorf("Expected generic error message, got %q", body)
+	}
+}
+
+func TestRecoveryWithoutLoggerInContext(t *testing.T) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		panic("test panic")
+	}
+
+	recoveryHandler := Recovery()(handler)
+
+	req, err := http.NewRequest("GET", "/test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// No logger in context — should not double-panic
+	w := httptest.NewRecorder()
+	recoveryHandler(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status 500, got %d", w.Code)
 	}
 }
 
 func TestRecoveryWithDifferentPanicTypes(t *testing.T) {
 	tests := []struct {
-		name        string
-		panicValue  interface{}
-		expectedMsg string
+		name       string
+		panicValue any
 	}{
-		{"string panic", "test panic", "test panic"},
-		{"error panic", http.ErrServerClosed, "server closed"},
-		{"int panic", 42, "42"},
-		{"nil panic", nil, ""},
+		{"string panic", "test panic"},
+		{"error panic", http.ErrServerClosed},
+		{"int panic", 42},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a handler that panics with the specified value
-			handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+			handler := func(w http.ResponseWriter, r *http.Request) {
 				panic(tt.panicValue)
 			}
 
-			// Apply recovery middleware
 			recoveryHandler := Recovery()(handler)
 
-			// Create test request
 			req, err := http.NewRequest("GET", "/test", nil)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			// Create response recorder
+			ctx := log.SetLoggerToContext(req.Context(), log.NewLogger())
+			req = req.WithContext(ctx)
+
 			w := httptest.NewRecorder()
+			recoveryHandler(w, req)
 
-			// Create context with logger
-			ctx := context.Background()
-			logger := log.NewLogger()
-			ctx = log.SetLoggerToContext(ctx, logger)
-
-			// Call the handler - this should not panic due to recovery middleware
-			recoveryHandler(ctx, w, req)
-
-			// Check that we got an internal server error
 			if w.Code != http.StatusInternalServerError {
 				t.Errorf("Expected status 500 after panic, got %d", w.Code)
 			}
 
-			// Check that we got an error response
-			if w.Body.String() == "" {
-				t.Error("Expected error response body, got empty")
+			body := strings.TrimSpace(w.Body.String())
+			if body != "internal server error" {
+				t.Errorf("Expected generic error, got %q", body)
 			}
 		})
 	}
@@ -142,32 +135,23 @@ func TestRecoveryWithDifferentMethods(t *testing.T) {
 
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
-			// Create a handler that panics
-			handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+			handler := func(w http.ResponseWriter, r *http.Request) {
 				panic("test panic")
 			}
 
-			// Apply recovery middleware
 			recoveryHandler := Recovery()(handler)
 
-			// Create test request
 			req, err := http.NewRequest(method, "/test", nil)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			// Create response recorder
+			ctx := log.SetLoggerToContext(req.Context(), log.NewLogger())
+			req = req.WithContext(ctx)
+
 			w := httptest.NewRecorder()
+			recoveryHandler(w, req)
 
-			// Create context with logger
-			ctx := context.Background()
-			logger := log.NewLogger()
-			ctx = log.SetLoggerToContext(ctx, logger)
-
-			// Call the handler
-			recoveryHandler(ctx, w, req)
-
-			// Check that we got an internal server error
 			if w.Code != http.StatusInternalServerError {
 				t.Errorf("Expected status 500 for %s, got %d", method, w.Code)
 			}
@@ -176,41 +160,37 @@ func TestRecoveryWithDifferentMethods(t *testing.T) {
 }
 
 func BenchmarkRecovery(b *testing.B) {
-	handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	recoveryHandler := Recovery()(handler)
 	req, _ := http.NewRequest("GET", "/test", nil)
-
-	// Create context with logger
 	ctx := context.Background()
-	logger := log.NewLogger()
-	ctx = log.SetLoggerToContext(ctx, logger)
+	ctx = log.SetLoggerToContext(ctx, log.NewLogger())
+	req = req.WithContext(ctx)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		w := httptest.NewRecorder()
-		recoveryHandler(ctx, w, req)
+		recoveryHandler(w, req)
 	}
 }
 
 func BenchmarkRecoveryWithPanic(b *testing.B) {
-	handler := func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		panic("test panic")
 	}
 
 	recoveryHandler := Recovery()(handler)
 	req, _ := http.NewRequest("GET", "/test", nil)
-
-	// Create context with logger
 	ctx := context.Background()
-	logger := log.NewLogger()
-	ctx = log.SetLoggerToContext(ctx, logger)
+	ctx = log.SetLoggerToContext(ctx, log.NewLogger())
+	req = req.WithContext(ctx)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		w := httptest.NewRecorder()
-		recoveryHandler(ctx, w, req)
+		recoveryHandler(w, req)
 	}
 }

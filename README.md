@@ -1,266 +1,324 @@
-# Zero - Minimal HTTP Server Library
+# Zero - Pure Golang HTTP Server Library
 
 A simple, lean, and blazingly fast HTTP server library built with pure Go using only native libraries. Designed for maximum performance, security, and minimal resource footprint. Zero provides a lightweight foundation for building high-performance HTTP servers with comprehensive middleware support and graceful shutdown capabilities.
 
-## 🚀 Features
+## Features
 
 - **Zero Dependencies**: Uses only Go's standard library - no external packages
 - **Lightning Fast**: Optimized for high-performance request handling
 - **Memory Efficient**: Minimal memory footprint and garbage collection pressure
 - **Security First**: Built with security best practices and input validation
 - **Simple & Clean**: Easy to understand, maintain, and extend
-- **Production Ready**: Robust error handling, logging, and graceful shutdown
-- **Middleware Support**: Built-in CORS, logging, and recovery middleware
-- **Comprehensive Documentation**: Fully documented with Go standard comments
-- **Type-Safe**: Strong typing for request parameters and responses
-- **Context Integration**: Full support for request context and tracing
+- **Production Ready**: Robust error handling, structured logging, and graceful shutdown
+- **Middleware Support**: Built-in CORS, `log/slog` request logging, panic recovery, and request ID generation
+- **Type-Safe**: Generic-based type-safe parameter parsing
+- **Context Integration**: Full support for request context, structured logging, and request ID tracing
 
-## 🎯 Why Zero?
+## Requirements
 
-- **Simplicity**: No complex frameworks or abstractions
-- **Performance**: Direct use of Go's `net/http` for maximum speed
-- **Security**: Reduced attack surface with minimal dependencies
-- **Reliability**: Fewer moving parts means fewer failure points
-- **Maintainability**: Clean, readable code that's easy to debug
-- **Flexibility**: Easy to customize and extend for your needs
-
-## 📋 Requirements
-
-- Go 1.24.7 or higher
+- Go 1.24.6 or higher
 - No external dependencies required
 
-## 🛠️ Installation
+## Installation
 
 ```bash
-# Add to your project
 go get github.com/aleal/zero
-
-# Or clone the repository
-git clone https://github.com/aleal/zero.git
-cd zero
-
-# Run the example server
-go run examples/server/cmd/main.go
 ```
 
-## 🚀 Quick Start
-
-```bash
-# Run the example server
-go run examples/server/cmd/main.go
-
-# Or build and run the example
-go build -o server examples/server/cmd/main.go && ./server
-```
-
-The example server will start on `http://localhost:8000` by default.
-
-### Using the Library
+## Quick Start
 
 ```go
 package main
 
 import (
     "context"
+    "log"
     "net/http"
-    
-    "github.com/aleal/zero/pkg/server"
-    "github.com/aleal/zero/pkg/request"
+
     "github.com/aleal/zero/pkg/response"
+    zero "github.com/aleal/zero/pkg/server"
 )
 
 func main() {
     ctx := context.Background()
-    
-    // Create a new server instance
-    server := server.NewServer(ctx)
-    
-    // Add your routes
-    server.Get("/hello", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+
+    srv := zero.New(ctx, zero.WithDefaultMiddlewares())
+
+    srv.Get("/hello", func(w http.ResponseWriter, r *http.Request) {
         response.WriteJSON(w, http.StatusOK, map[string]string{
             "message": "Hello from Zero!",
         })
     })
-    
-    // Start the server
-    server.Start()
+
+    if err := srv.Start(); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
-## 📖 Usage
+`New` registers `GET /health` automatically. `Start` blocks until a signal is received, then shuts down gracefully and returns any error.
 
-### Basic Usage
+## Environment Variables
 
-```bash
-# Run the example server with default settings
-go run examples/server/cmd/main.go
+All configuration is done via environment variables and programmatic options. There are no command-line flags — the library never calls `flag.Parse()`.
 
-# Run with custom port
-go run examples/server/cmd/main.go -port 3000
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ZERO_HOST` | `localhost` | Server host |
+| `ZERO_PORT` | `8000` | Server port |
+| `ZERO_READ_TIMEOUT` | `5s` | HTTP read timeout |
+| `ZERO_WRITE_TIMEOUT` | `15s` | HTTP write timeout |
+| `ZERO_IDLE_TIMEOUT` | `60s` | HTTP idle timeout |
+| `ZERO_MAX_JSON_REQUEST_BODY_SIZE` | `1048576` | Max JSON body size in bytes (1 MB) |
+| `ZERO_MAX_UPLOADED_FILE_SIZE` | `10485760` | Max uploaded file size in bytes (10 MB) |
+| `ZERO_LOG_LEVEL` | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 
-# Run with custom host
-go run examples/server/cmd/main.go -host 0.0.0.0 -port 8000
-```
+Invalid env values are logged at `WARN` level and the default is used — the server always starts. Middleware (CORS, logging, recovery) is configured in code via server options, not environment variables.
 
-### Environment Variables
-
-The server supports configuration through environment variables:
-
-- `ZERO_HOST`: Server host (default: localhost)
-- `ZERO_PORT`: Server port (default: 8000)
-- `ZERO_READ_TIMEOUT`: Read timeout duration (default: 5s)
-- `ZERO_WRITE_TIMEOUT`: Write timeout duration (default: 15s)
-- `ZERO_IDLE_TIMEOUT`: Idle timeout duration (default: 60s)
-- `ZERO_RATE_LIMIT`: Rate limit per second (default: 100)
-- `ZERO_ENABLE_LOGGING`: Enable request logging (default: true)
-- `ZERO_ENABLE_CORS`: Enable CORS middleware (default: true)
-- `ZERO_ENABLE_RECOVERY`: Enable panic recovery (default: true)
-- `ZERO_LOG_LEVEL`: Log level (DEBUG, INFO, WARNING, ERROR, FATAL, PANIC)
-
-## 🏗️ Architecture
+## Architecture
 
 ```
 zero/
-├── pkg/                   # Public packages
-│   ├── server/            # Core server implementation
-│   ├── config/            # Configuration management
-│   ├── log/               # Structured logging
-│   ├── middlewares/       # HTTP middleware
-│   ├── request/           # Request utilities
-│   ├── response/          # Response utilities
-│   └── uuid/              # UUID generation
-├── internal/              # Internal packages
-│   ├── context/           # Context key definitions
-│   └── handlers/          # Built-in HTTP handlers
-├── examples/              # Runnable examples
-│   └── server/            # Example server implementation
-│       ├── cmd/           # Example server entry point
-│       └── static/        # Static files
-└── README.md              # This file
+├── pkg/
+│   ├── server/            # Core server, interface, and options
+│   ├── config/            # Configuration (env vars + defaults)
+│   ├── log/               # slog-based structured logging
+│   ├── metadata/           # Library version (auto-detected from Go module info)
+│   ├── middlewares/        # CORS, logging, recovery, middleware chain
+│   ├── requestid/          # Hostname-counter request ID generation
+│   ├── request/            # Request utilities and builder
+│   ├── response/           # Response utilities
+│   └── parser/             # Type-safe parsing and JSON body decoding
+├── internal/
+│   └── handlers/           # Built-in handlers (health check)
+├── examples/
+│   └── server/cmd/         # Example server
+└── README.md
 ```
 
-## 🔧 Configuration
+## Configuration
 
-The library provides flexible configuration through:
-
-- **Programmatic Configuration**: Direct configuration via `config.Config`
-- **Environment Variables**: All settings configurable via environment
-- **Command Line Flags**: Host and port via command line arguments
-- **Default Values**: Sensible defaults for all settings
-
-### Configuration Example
+### Programmatic
 
 ```go
 package main
 
 import (
     "context"
+    "log"
     "time"
-    
+
     "github.com/aleal/zero/pkg/config"
+    "github.com/aleal/zero/pkg/middlewares"
     "github.com/aleal/zero/pkg/server"
 )
 
 func main() {
     ctx := context.Background()
-    
-    // Create custom configuration
-    cfg := config.Default()
+
+    cfg := config.Load()
     cfg.SetHost("0.0.0.0")
     cfg.SetPort(3000)
     cfg.SetReadTimeout(10 * time.Second)
     cfg.SetWriteTimeout(30 * time.Second)
-    cfg.SetAllowedOrigins([]string{"https://example.com"})
-    
-    // Create server with custom config
-    server := server.NewServerWithConfig(ctx, cfg)
-    
-    // Add routes and start
-    server.Start()
+    cfg.SetMaxJSONBodySize(5 << 20) // 5 MB
+
+    srv := server.New(ctx,
+        server.WithConfig(cfg),
+        server.WithCORS([]string{"https://example.com"}, middlewares.MiddlewarePriorityLow),
+        server.WithDefaultLogging(),
+        server.WithDefaultRecovery(),
+    )
+
+    if err := srv.Start(); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
-## 🛡️ Security Features
+### Options
 
-- **Input Validation**: All request parameters are sanitized and validated
-- **CORS Support**: Configurable Cross-Origin Resource Sharing
-- **Request Logging**: Comprehensive request/response logging with context
-- **Panic Recovery**: Automatic recovery from panics with proper error responses
-- **Type Safety**: Strong typing prevents common security issues
-- **Context Isolation**: Request-specific context prevents data leakage
+Common options passed to `server.New(ctx, ...)`:
 
-## 📊 Performance
+| Option | Description |
+|--------|-------------|
+| `WithConfig(cfg)` | Use a custom `*config.Config` |
+| `WithHost(host)` | Override host |
+| `WithPort(port)` | Override port |
+| `WithReadTimeout(d)` | Override read timeout |
+| `WithWriteTimeout(d)` | Override write timeout |
+| `WithIdleTimeout(d)` | Override idle timeout |
+| `WithMaxUploadedFileSize(n)` | Override max uploaded file size |
+| `WithDefaultMiddlewares()` | Apply default logging + CORS + recovery |
+| `WithDefaultLogging()` | Structured JSON logging via `log/slog` |
+| `WithDefaultCORS()` | CORS with wildcard origin |
+| `WithDefaultRecovery()` | Panic recovery middleware |
+| `WithCORS(origins, priority)` | CORS with specific origins |
+| `WithLogging(logger, priority)` | Custom slog logger |
+| `WithRecovery(priority)` | Recovery middleware |
+| `WithMiddleware(mw, priority)` | Custom middleware |
 
-- **Low Latency**: Optimized for minimal response times
-- **High Throughput**: Efficient handling of concurrent requests
-- **Memory Efficient**: Minimal memory allocation patterns
-- **CPU Optimized**: Efficient goroutine usage and context switching
+## Server Interface
 
-## 🔍 Built-in Endpoints
+```go
+type Zero interface {
+    Get(pattern string, handler request.Handler, middlewares ...middlewares.Middleware)
+    Post(pattern string, handler request.Handler, middlewares ...middlewares.Middleware)
+    Put(pattern string, handler request.Handler, middlewares ...middlewares.Middleware)
+    Delete(pattern string, handler request.Handler, middlewares ...middlewares.Middleware)
+    Patch(pattern string, handler request.Handler, middlewares ...middlewares.Middleware)
+    Handle(pattern string, method string, handler request.Handler, middlewares ...middlewares.Middleware)
+    Handler() http.Handler
+    Start() error
+    Shutdown(ctx context.Context) error
+}
+```
 
-The example server includes several demonstration endpoints:
+- `Handler()` returns the underlying `http.Handler` — useful for `httptest.NewServer(srv.Handler())` in tests.
+- `Start()` blocks until interrupted, then performs graceful shutdown and returns any error.
+- `Shutdown(ctx)` triggers graceful shutdown programmatically.
+- Route methods accept optional per-route middlewares.
 
-- `GET /health` - Health check endpoint
-- `GET /hello` - Hello world with timestamp
-- `GET /users` - List of example users
-- `GET /users/{id}` - Get user by ID (path parameter example)
-- `POST /users` - Create new user (JSON body parsing example)
-- `GET /status` - Server status information
-- `GET /static` - Static file serving example
-- `GET /` - HTML documentation page
+## Request Utilities
 
-## 🧪 Testing
+```go
+// Parse JSON body (respects ZERO_MAX_JSON_REQUEST_BODY_SIZE, or pass explicit limit)
+if err := parser.ParseJSONBody(r.Body, &user); err != nil {
+    // handle error
+}
+
+// With explicit max size
+if err := parser.ParseJSONBody(r.Body, &user, cfg.MaxJSONBodySize); err != nil {
+    // handle error
+}
+
+// Path parameters (Go 1.22+ routing, e.g. pattern "/users/{id}")
+id := request.GetPathParam(r, "id")
+
+// Query parameters
+page := request.GetQueryParam(r, "page")
+limit := request.GetParsedQueryParamOrDefault[int](r, "limit", 20)
+
+// Type-safe parsing from string
+var port int
+_ = parser.ParseString("8080", &port)
+```
+
+## Request Builder
+
+Fluent builder for constructing outbound HTTP requests. Supports JSON bodies, multipart form uploads, and custom headers.
+
+```go
+// JSON POST
+req, err := request.NewBuilder(ctx, http.MethodPost, "https://api.example.com/users").
+    WithBodyJSON(map[string]string{"name": "Alice"}).
+    WithHeader("Authorization", "Bearer tok").
+    Build()
+if err != nil {
+    // handle error
+}
+
+client := &http.Client{Timeout: 10 * time.Second}
+resp, err := client.Do(req)
+```
+
+```go
+// Multipart file upload
+file := request.NewUploadedFile(data, "photo.jpg", "image/jpeg")
+req, err := request.NewBuilder(ctx, http.MethodPost, "https://api.example.com/upload").
+    WithFormFile("avatar", file).
+    WithFormField("description", "Profile photo").
+    Build()
+```
+
+### Builder Interface
+
+```go
+type Builder interface {
+    WithContext(ctx context.Context) Builder
+    WithMethod(method string) Builder
+    WithURL(url string) Builder
+    WithHeader(key, value string) Builder
+    WithFormFile(key string, file *UploadedFile) Builder
+    WithFormField(key, value string) Builder
+    WithBodyJSON(body any) Builder
+    Build() (*http.Request, error)
+}
+```
+
+## Response Utilities
+
+```go
+response.WriteJSON(w, http.StatusOK, data)
+response.WriteError(w, http.StatusBadRequest, err)
+response.WriteErrorMsg(w, http.StatusNotFound, "not found")
+response.SetHeader(w, "X-Custom-Header", "value")
+```
+
+## Request IDs
+
+The logging middleware generates request IDs in the format `hostname-counter` using an atomic counter. These are:
+
+- Injected into the structured logger as `requestId`
+- Stored in request context (retrieve with `requestid.FromContext(r.Context())`)
+- Unique per host, monotonically increasing, zero crypto overhead
+
+## Security
+
+- **Input Validation**: All request parameters sanitized (null bytes, control characters removed)
+- **CORS**: Wildcard origin uses literal `*` without credentials; explicit origins set `Access-Control-Allow-Credentials: true` with `Vary: Origin`
+- **Panic Recovery**: Generic error returned to client; panic details logged server-side only
+- **Body Limits**: JSON body parsing limited by `ZERO_MAX_JSON_REQUEST_BODY_SIZE` (default 1 MB); file uploads rejected above `ZERO_MAX_UPLOADED_FILE_SIZE` (default 10 MB)
+- **Type Safety**: Generic-based parsing prevents common injection issues
+
+## Built-in Endpoints
+
+Every server instance registers `GET /health` automatically, returning:
+
+```json
+{"service": "zero", "version": "v0.1.0", "uptime": "1h23m45s"}
+```
+
+The version is detected automatically from Go's module build info (`runtime/debug.ReadBuildInfo`). When imported as a dependency via `go get github.com/aleal/zero@v0.1.0`, the tagged version appears in the banner and health endpoint with no manual steps. During local development it shows `devel`.
+
+The example server adds: `/hello`, `/users`, `/users/{id}`, `/status`, `/static`, `/`.
+
+## Testing
 
 ```bash
-# Run all tests
-go test ./...
+# Run all tests with coverage
+make test
 
-# Run tests with coverage
-go test -cover ./...
+# Open HTML coverage report
+make coverage
 
 # Run benchmarks
-go test -bench=. ./...
+make bench
 
-# Check for common issues
+# Check for issues
 go vet ./...
 ```
 
-## 🚀 Deployment
-
-### Using in Your Application
+Use `Handler()` in tests to exercise the actual server routing:
 
 ```go
-package main
-
-import (
-    "context"
-    "github.com/aleal/zero/pkg/server"
-    "github.com/aleal/zero/pkg/request"
-    "github.com/aleal/zero/pkg/response"
-)
-
-func main() {
-    ctx := context.Background()
-    server := server.NewServer(ctx)
-    
-    // Add your application routes
-    server.Get("/api/users", handleGetUsers)
-    server.Post("/api/users", handleCreateUser)
-    
-    // Start the server
-    server.Start()
-}
-
-func handleGetUsers(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-    // Your handler logic here
-    response.WriteJSON(w, http.StatusOK, []map[string]interface{}{
-        {"id": 1, "name": "Alice"},
-        {"id": 2, "name": "Bob"},
+func TestAPI(t *testing.T) {
+    srv := server.New(context.Background())
+    srv.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+        response.WriteJSON(w, http.StatusOK, map[string]string{"pong": "ok"})
     })
+
+    ts := httptest.NewServer(srv.Handler())
+    defer ts.Close()
+
+    resp, _ := http.Get(ts.URL + "/ping")
+    // assert resp...
 }
 ```
 
-### Docker Example
+## Deployment
+
+### Docker
 
 ```dockerfile
 FROM golang:1.24-alpine AS builder
@@ -276,7 +334,7 @@ EXPOSE 8000
 CMD ["./server"]
 ```
 
-### Systemd Service
+### Systemd
 
 ```ini
 [Unit]
@@ -297,54 +355,7 @@ Environment=ZERO_PORT=8000
 WantedBy=multi-user.target
 ```
 
-## 📚 API Documentation
-
-### Server Interface
-
-```go
-type Server interface {
-    Get(pattern string, handler request.Handler)
-    Post(pattern string, handler request.Handler)
-    Put(pattern string, handler request.Handler)
-    Delete(pattern string, handler request.Handler)
-    Patch(pattern string, handler request.Handler)
-    Handle(pattern string, method string, handler request.Handler)
-    Middlewares(middlewares ...middlewares.Middleware)
-    Start()
-}
-```
-
-### Request Utilities
-
-```go
-    // Parse JSON request body
-    parser.ParseJSONBody(r, &user)
-
-    // Get path parameters
-    id := request.GetPathParam(r, "id")
-
-    // Get query parameters
-    page := request.GetQueryParam(r, "page")
-
-    // Type-safe parameter parsing
-    var limit int
-    parser.ParseString("100", &limit)
-```
-
-### Response Utilities
-
-```go
-// Write JSON response
-response.WriteJSON(w, http.StatusOK, data)
-
-// Write error response
-response.WriteError(w, http.StatusBadRequest, err)
-
-// Set custom headers
-response.SetHeader(w, "X-Custom-Header", "value")
-```
-
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -355,28 +366,14 @@ response.SetHeader(w, "X-Custom-Header", "value")
 ### Development Guidelines
 
 - Follow Go coding standards and conventions
-- Add comprehensive comments for all exported functions and types
+- Add comments for all exported functions and types
 - Include tests for new functionality
-- Update documentation as needed
 - Ensure all code passes `go vet` and `go fmt`
 
-## 📝 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
-
-- Built with Go's excellent standard library
-- Inspired by the simplicity and performance of minimal HTTP servers
-- Thanks to the Go community for best practices and patterns
-- Comprehensive documentation following Go standards
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/aleal/zero/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/aleal/zero/discussions)
-- **Documentation**: [GoDoc](https://pkg.go.dev/github.com/aleal/zero)
-
 ---
 
-**Zero** - Because sometimes less is more. 🚀 
+**Zero** - Because sometimes less is more.

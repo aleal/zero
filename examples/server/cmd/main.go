@@ -5,47 +5,48 @@ package main
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
-	"github.com/aleal/zero/pkg/log"
+	zerolog "github.com/aleal/zero/pkg/log"
 	"github.com/aleal/zero/pkg/parser"
 	"github.com/aleal/zero/pkg/request"
 	"github.com/aleal/zero/pkg/response"
-	zero "github.com/aleal/zero/pkg/server"
+	"github.com/aleal/zero/pkg/server"
 )
 
 // main initializes and starts the Zero HTTP server with example routes
 func main() {
 	ctx := context.Background()
-	// Create server instance with flags and environment variables
-	server := zero.NewServer(ctx)
+	zero := server.New(ctx, server.WithDefaultMiddlewares())
 
-	// Add routes
-	setupRoutes(server)
+	setupRoutes(zero)
 
-	// Start server
-	server.Start()
+	if err := zero.Start(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 // setupRoutes configures all the HTTP routes for the example server
-func setupRoutes(server zero.Server) {
+func setupRoutes(zero server.Zero) {
 	// Health check (already added by NewServer)
 	// server.Get("/health", handlers.HealthCheckHandler)
 
 	// API routes
-	server.Get("/hello", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		logger := log.FromContext(rctx)
-		logger.Info(rctx, "Hello from Zero!")
+	zero.Get("/hello", func(w http.ResponseWriter, r *http.Request) {
+		rctx := r.Context()
+		logger := zerolog.FromContext(rctx)
+		logger.Info("Hello from Zero!")
 		response.WriteJSON(w, http.StatusOK, map[string]any{
 			"message": "Hello from Zero!",
 			"time":    time.Now().UTC().Format(time.RFC3339),
 		})
-		logger.Info(rctx, "Done!")
+		logger.Info("Done!")
 	})
 
-	server.Get("/users", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		users := []map[string]interface{}{
+	zero.Get("/users", func(w http.ResponseWriter, r *http.Request) {
+		users := []map[string]any{
 			{"id": 1, "name": "Alice", "email": "alice@example.com"},
 			{"id": 2, "name": "Bob", "email": "bob@example.com"},
 			{"id": 3, "name": "Charlie", "email": "charlie@example.com"},
@@ -53,35 +54,35 @@ func setupRoutes(server zero.Server) {
 		response.WriteJSON(w, http.StatusOK, users)
 	})
 
-	server.Get("/users/{id}", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	zero.Get("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
 		// In a real application, you would parse the ID from the URL
-		response.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		response.WriteJSON(w, http.StatusOK, map[string]any{
 			"id":    request.GetPathParam(r, "id"),
 			"name":  "Alice",
 			"email": "alice@example.com",
 		})
 	})
 
-	server.Post("/users", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	zero.Post("/users", func(w http.ResponseWriter, r *http.Request) {
 		var user struct {
 			Name  string `json:"name"`
 			Email string `json:"email"`
 		}
 
-		if err := parser.ParseJSONBody(r, &user); err != nil {
+		if err := parser.ParseJSONBody(r.Body, &user); err != nil {
 			response.WriteErrorMsg(w, http.StatusBadRequest, "Invalid JSON")
 			return
 		}
 
 		// In a real application, you would save the user to a database
-		response.WriteJSON(w, http.StatusCreated, map[string]interface{}{
+		response.WriteJSON(w, http.StatusCreated, map[string]any{
 			"id":    4,
 			"name":  user.Name,
 			"email": user.Email,
 		})
 	})
 
-	server.Get("/status", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	zero.Get("/status", func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]any{
 			"status":    "running",
 			"uptime":    "1h 23m 45s",
@@ -92,12 +93,12 @@ func setupRoutes(server zero.Server) {
 	})
 
 	// Static file serving example
-	server.Get("/static", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	zero.Get("/static", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "examples/server/static/index.html")
 	})
 
 	// 404 handler for unmatched routes
-	server.Get("/", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	zero.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		// Serve a simple HTML page
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(`
@@ -139,7 +140,7 @@ func setupRoutes(server zero.Server) {
         
         <h2>Try it out:</h2>
         <p>Use curl or your browser to test the endpoints:</p>
-        <pre><code>curl http://localhost:8080/api/hello</code></pre>
+        <pre><code>curl http://localhost:8000/hello</code></pre>
     </div>
 </body>
 </html>

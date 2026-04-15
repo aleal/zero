@@ -1,29 +1,64 @@
 package middlewares
 
 import (
-	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/aleal/zero/pkg/log"
 	"github.com/aleal/zero/pkg/request"
+	"github.com/aleal/zero/pkg/requestid"
 )
 
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+	written    bool
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	if rw.written {
+		return
+	}
+	rw.statusCode = code
+	rw.written = true
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	if !rw.written {
+		rw.WriteHeader(http.StatusOK) // Default to 200 if Write is called first
+	}
+	return rw.ResponseWriter.Write(b)
+}
+
+// Unwrap returns the underlying ResponseWriter so http.NewResponseController
+// can reach Flusher, Hijacker, etc.
+func (rw *responseWriter) Unwrap() http.ResponseWriter {
+	return rw.ResponseWriter
+}
+
 // Logging middleware logs request details
-func Logging() Middleware {
+func Logging(logger *slog.Logger) Middleware {
 	return func(next request.Handler) request.Handler {
-		return func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+		return func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			logger := log.FromContext(rctx)
-			if logger != nil {
-				logger.Info(rctx, "%s %s %s started", r.Method, r.RequestURI, r.RemoteAddr)
-			}
-			next(rctx, w, r)
-			if logger != nil {
-				duration := time.Since(start)
-				statusCode := w.Header().Get("Status")
-				logger.Info(rctx, "%s %s %s %s %v", r.Method, r.RequestURI, r.RemoteAddr, statusCode, duration)
-			}
+			rid := requestid.New()
+			logger := logger.With(
+				slog.String("requestId", rid),
+				slog.String("method", r.Method),
+				slog.String("requestURI", r.RequestURI),
+				slog.String("remoteAddr", r.RemoteAddr),
+				slog.String("userAgent", r.UserAgent()),
+			)
+			logger.Info("Request started")
+			rctx := requestid.WithContext(r.Context(), rid)
+			rctx = log.SetLoggerToContext(rctx, logger)
+			r = r.WithContext(rctx)
+			rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK, written: false}
+			next(rw, r)
+			duration := time.Since(start).Microseconds()
+			logger.Info("Request completed", slog.Int64("durationMicros", duration), slog.Int("statusCode", rw.statusCode))
 		}
 	}
 }

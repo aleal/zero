@@ -7,48 +7,42 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
-	"github.com/aleal/zero/pkg/config"
 	"github.com/aleal/zero/pkg/parser"
 	"github.com/aleal/zero/pkg/request"
 	"github.com/aleal/zero/pkg/response"
-	zeroserver "github.com/aleal/zero/pkg/server"
+	"github.com/aleal/zero/pkg/server"
 )
 
 func TestIntegrationServer(t *testing.T) {
 	ctx := context.Background()
-	cfg := config.Default()
-	cfg.SetPort(0) // Use random port for testing
-	serverInstance := zeroserver.NewServerWithConfig(ctx, cfg)
+	z := server.New(ctx)
 
-	// Register test endpoints
-	serverInstance.Get("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	z.Get("/test", func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "GET success"})
 	})
 
-	serverInstance.Post("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		var data map[string]interface{}
-		if err := parser.ParseJSONBody(r, &data); err != nil {
+	z.Post("/test", func(w http.ResponseWriter, r *http.Request) {
+		var data map[string]any
+		if err := parser.ParseJSONBody(r.Body, &data); err != nil {
 			response.WriteError(w, http.StatusBadRequest, err)
 			return
 		}
-		response.WriteJSON(w, http.StatusCreated, map[string]interface{}{
+		response.WriteJSON(w, http.StatusCreated, map[string]any{
 			"message": "POST success",
 			"data":    data,
 		})
 	})
 
-	serverInstance.Put("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	z.Put("/test", func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "PUT success"})
 	})
 
-	serverInstance.Delete("/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	z.Delete("/test", func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "DELETE success"})
 	})
 
-	// Test query parameters
-	serverInstance.Get("/query", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
+	z.Get("/query", func(w http.ResponseWriter, r *http.Request) {
 		name := request.GetQueryParamOrDefault(r, "name", "default")
 		age := request.GetQueryParamOrDefault(r, "age", "0")
 		response.WriteJSON(w, http.StatusOK, map[string]string{
@@ -57,55 +51,10 @@ func TestIntegrationServer(t *testing.T) {
 		})
 	})
 
-	// Test with middleware
-	serverInstance.Middlewares(func(next request.Handler) request.Handler {
-		return func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("X-Test-Middleware", "true")
-			next(rctx, w, r)
-		}
-	})
-
-	// Create test server
-	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Simulate the server's request handling
-		switch r.URL.Path {
-		case "/test":
-			switch r.Method {
-			case "GET":
-				response.WriteJSON(w, http.StatusOK, map[string]string{"message": "GET success"})
-			case "POST":
-				var data map[string]interface{}
-				if err := parser.ParseJSONBody(r, &data); err != nil {
-					response.WriteError(w, http.StatusBadRequest, err)
-					return
-				}
-				response.WriteJSON(w, http.StatusCreated, map[string]interface{}{
-					"message": "POST success",
-					"data":    data,
-				})
-			case "PUT":
-				response.WriteJSON(w, http.StatusOK, map[string]string{"message": "PUT success"})
-			case "DELETE":
-				response.WriteJSON(w, http.StatusOK, map[string]string{"message": "DELETE success"})
-			default:
-				response.WriteErrorMsg(w, http.StatusMethodNotAllowed, "Method not allowed")
-			}
-		case "/query":
-			name := request.GetQueryParamOrDefault(r, "name", "default")
-			age := request.GetQueryParamOrDefault(r, "age", "0")
-			response.WriteJSON(w, http.StatusOK, map[string]string{
-				"name": name,
-				"age":  age,
-			})
-		case "/health":
-			response.WriteJSON(w, http.StatusOK, map[string]string{"status": "healthy"})
-		default:
-			response.WriteErrorMsg(w, http.StatusNotFound, "Not found")
-		}
-	}))
+	// Use the actual zero mux
+	testServer := httptest.NewServer(z.Handler())
 	defer testServer.Close()
 
-	// Test GET request
 	t.Run("GET request", func(t *testing.T) {
 		resp, err := http.Get(testServer.URL + "/test")
 		if err != nil {
@@ -127,9 +76,8 @@ func TestIntegrationServer(t *testing.T) {
 		}
 	})
 
-	// Test POST request with JSON body
 	t.Run("POST request with JSON", func(t *testing.T) {
-		data := map[string]interface{}{"name": "test", "value": 123}
+		data := map[string]any{"name": "test", "value": 123}
 		jsonData, _ := json.Marshal(data)
 
 		resp, err := http.Post(testServer.URL+"/test", "application/json", bytes.NewBuffer(jsonData))
@@ -142,7 +90,7 @@ func TestIntegrationServer(t *testing.T) {
 			t.Errorf("Expected status 201, got %d", resp.StatusCode)
 		}
 
-		var result map[string]interface{}
+		var result map[string]any
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 			t.Fatal(err)
 		}
@@ -152,7 +100,6 @@ func TestIntegrationServer(t *testing.T) {
 		}
 	})
 
-	// Test query parameters
 	t.Run("Query parameters", func(t *testing.T) {
 		resp, err := http.Get(testServer.URL + "/query?name=john&age=25")
 		if err != nil {
@@ -178,7 +125,6 @@ func TestIntegrationServer(t *testing.T) {
 		}
 	})
 
-	// Test health endpoint
 	t.Run("Health endpoint", func(t *testing.T) {
 		resp, err := http.Get(testServer.URL + "/health")
 		if err != nil {
@@ -195,12 +141,11 @@ func TestIntegrationServer(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if result["status"] != "healthy" {
-			t.Errorf("Expected status 'healthy', got %s", result["status"])
+		if result["service"] != "zero" {
+			t.Errorf("Expected service 'zero', got %s", result["service"])
 		}
 	})
 
-	// Test 404
 	t.Run("Not found", func(t *testing.T) {
 		resp, err := http.Get(testServer.URL + "/nonexistent")
 		if err != nil {
@@ -214,37 +159,15 @@ func TestIntegrationServer(t *testing.T) {
 	})
 }
 
-func TestIntegrationWithRealServer(t *testing.T) {
+func BenchmarkIntegrationRequests(b *testing.B) {
 	ctx := context.Background()
-	cfg := config.Default()
-	cfg.SetPort(0) // Use random port
-	serverInstance := zeroserver.NewServerWithConfig(ctx, cfg)
+	z := server.New(ctx)
 
-	// Add a simple endpoint
-	serverInstance.Get("/api/test", func(rctx context.Context, w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "API test successful"})
+	z.Get("/test", func(w http.ResponseWriter, r *http.Request) {
+		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
 	})
 
-	// Start server in a goroutine
-	go func() {
-		// Note: In a real test, you'd want to properly start and stop the server
-		// For this integration test, we'll just verify the server can be created
-	}()
-
-	// Give the server a moment to start
-	time.Sleep(100 * time.Millisecond)
-
-	// Verify server was created successfully
-	if serverInstance == nil {
-		t.Error("Server was not created")
-	}
-}
-
-func BenchmarkIntegrationRequests(b *testing.B) {
-	// Create a test server
-	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
-	}))
+	testServer := httptest.NewServer(z.Handler())
 	defer testServer.Close()
 
 	b.ResetTimer()

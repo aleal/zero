@@ -5,9 +5,8 @@ package response
 
 import (
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"net/http"
-	"strconv"
 )
 
 // WriteJSON writes a JSON response with the given status code and data
@@ -23,13 +22,15 @@ func WriteJSON(w http.ResponseWriter, statusCode int, data any) {
 func Write(w http.ResponseWriter, contentType string, statusCode int, data []byte) {
 	SetHeader(w, "Content-Type", contentType)
 	w.WriteHeader(statusCode)
-	SetHeader(w, "Status", strconv.Itoa(statusCode))
-	w.Write(data)
+	if _, err := w.Write(data); err != nil {
+		slog.Debug("response write failed", slog.Any("error", err))
+	}
 }
 
-// InternalServerError writes a 500 Internal Server Error response
+// InternalServerError writes a generic 500 response to the client and logs the real error server-side
 func InternalServerError(w http.ResponseWriter, err error) {
-	WriteError(w, http.StatusInternalServerError, fmt.Errorf("internal server error: %w", err))
+	slog.Error("internal server error", slog.Any("error", err))
+	WriteErrorMsg(w, http.StatusInternalServerError, "internal server error")
 }
 
 // WriteError writes an error response with the given status code and error
@@ -39,7 +40,6 @@ func WriteError(w http.ResponseWriter, statusCode int, err error) {
 
 // WriteErrorMsg writes an error response with the given status code and message
 func WriteErrorMsg(w http.ResponseWriter, statusCode int, message string) {
-	SetHeader(w, "Status", strconv.Itoa(statusCode))
 	http.Error(w, message, statusCode)
 }
 

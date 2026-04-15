@@ -1,94 +1,41 @@
 // Package config provides configuration management for the Zero HTTP server.
-// It supports loading configuration from environment variables and provides
-// sensible defaults for server settings.
+// It supports loading configuration from environment variables with sensible defaults.
+// Options (WithConfig/WithPort/etc) override everything.
 package config
 
 import (
+	"log/slog"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/aleal/zero/pkg/parser"
 )
 
 // Config holds the server configuration
 type Config struct {
-	Host           string
-	Port           int
-	ReadTimeout    time.Duration
-	WriteTimeout   time.Duration
-	IdleTimeout    time.Duration
-	AllowedOrigins []string
-	RateLimit      int
-	EnableLogging  bool
-	EnableCORS     bool
-	EnableRecovery bool
+	Host                string
+	Port                int
+	ReadTimeout         time.Duration
+	WriteTimeout        time.Duration
+	IdleTimeout         time.Duration
+	MaxJSONBodySize     int64
+	MaxUploadedFileSize int64
 }
 
-// Default returns a default configuration
-func Default() *Config {
-	return &Config{
-		Host:           "localhost",
-		Port:           8000,
-		ReadTimeout:    5 * time.Second,
-		WriteTimeout:   15 * time.Second,
-		IdleTimeout:    60 * time.Second,
-		AllowedOrigins: []string{"*"},
-		RateLimit:      100,
-		EnableLogging:  true,
-		EnableCORS:     true,
-		EnableRecovery: true,
+// Load loads configuration from environment variables with sensible defaults.
+// Unparseable env values are logged at WARN level and the default is used.
+func Load() *Config {
+	config := &Config{
+		Host:            "localhost",
+		Port:            8000,
+		ReadTimeout:     5 * time.Second,
+		WriteTimeout:    15 * time.Second,
+		IdleTimeout:     60 * time.Second,
+		MaxJSONBodySize:     1 << 20, // 1 MB
+		MaxUploadedFileSize: 10 << 20, // 10 MB
 	}
-}
-
-// FromEnv loads configuration from environment variables
-func FromEnv() *Config {
-	config := Default()
-
-	if host := os.Getenv("ZERO_HOST"); host != "" {
-		config.Host = host
-	}
-
-	if portStr := os.Getenv("ZERO_PORT"); portStr != "" {
-		if port, err := strconv.Atoi(portStr); err == nil {
-			config.Port = port
-		}
-	}
-
-	if readTimeoutStr := os.Getenv("ZERO_READ_TIMEOUT"); readTimeoutStr != "" {
-		if readTimeout, err := time.ParseDuration(readTimeoutStr); err == nil {
-			config.ReadTimeout = readTimeout
-		}
-	}
-
-	if writeTimeoutStr := os.Getenv("ZERO_WRITE_TIMEOUT"); writeTimeoutStr != "" {
-		if writeTimeout, err := time.ParseDuration(writeTimeoutStr); err == nil {
-			config.WriteTimeout = writeTimeout
-		}
-	}
-
-	if idleTimeoutStr := os.Getenv("ZERO_IDLE_TIMEOUT"); idleTimeoutStr != "" {
-		if idleTimeout, err := time.ParseDuration(idleTimeoutStr); err == nil {
-			config.IdleTimeout = idleTimeout
-		}
-	}
-
-	if rateLimitStr := os.Getenv("ZERO_RATE_LIMIT"); rateLimitStr != "" {
-		if rateLimit, err := strconv.Atoi(rateLimitStr); err == nil {
-			config.RateLimit = rateLimit
-		}
-	}
-
-	if enableLoggingStr := os.Getenv("ZERO_ENABLE_LOGGING"); enableLoggingStr != "" {
-		config.EnableLogging = enableLoggingStr == "true"
-	}
-
-	if enableCORSStr := os.Getenv("ZERO_ENABLE_CORS"); enableCORSStr != "" {
-		config.EnableCORS = enableCORSStr == "true"
-	}
-
-	if enableRecoveryStr := os.Getenv("ZERO_ENABLE_RECOVERY"); enableRecoveryStr != "" {
-		config.EnableRecovery = enableRecoveryStr == "true"
-	}
-
+	parseEnv(config)
 	return config
 }
 
@@ -122,12 +69,40 @@ func (c *Config) SetIdleTimeout(timeout time.Duration) {
 	c.IdleTimeout = timeout
 }
 
-// SetAllowedOrigins sets the allowed CORS origins
-func (c *Config) SetAllowedOrigins(origins []string) {
-	c.AllowedOrigins = origins
+// SetMaxJSONBodySize sets the maximum JSON body size in bytes
+func (c *Config) SetMaxJSONBodySize(size int64) {
+	c.MaxJSONBodySize = size
 }
 
-// SetRateLimit sets the rate limit
-func (c *Config) SetRateLimit(limit int) {
-	c.RateLimit = limit
+// SetMaxUploadedFileSize sets the maximum uploaded file size in bytes
+func (c *Config) SetMaxUploadedFileSize(size int64) {
+	c.MaxUploadedFileSize = size
+}
+
+func parseEnv(config *Config) {
+	config.Host = getValueFromEnvOrDefault("ZERO_HOST", config.Host)
+	config.Port = getValueFromEnvOrDefault("ZERO_PORT", config.Port)
+	config.ReadTimeout = getValueFromEnvOrDefault("ZERO_READ_TIMEOUT", config.ReadTimeout)
+	config.WriteTimeout = getValueFromEnvOrDefault("ZERO_WRITE_TIMEOUT", config.WriteTimeout)
+	config.IdleTimeout = getValueFromEnvOrDefault("ZERO_IDLE_TIMEOUT", config.IdleTimeout)
+	config.MaxJSONBodySize = getValueFromEnvOrDefault("ZERO_MAX_JSON_REQUEST_BODY_SIZE", config.MaxJSONBodySize)
+	config.MaxUploadedFileSize = getValueFromEnvOrDefault("ZERO_MAX_UPLOADED_FILE_SIZE", config.MaxUploadedFileSize)
+}
+
+func getValueFromEnvOrDefault[T parser.ParseType](key string, defaultValue T) T {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	var parsedValue T
+	if err := parser.ParseString(value, &parsedValue); err != nil {
+		slog.Warn("invalid env value, using default",
+			slog.String("key", key),
+			slog.String("value", value),
+			slog.Any("default", defaultValue),
+			slog.Any("error", err),
+		)
+		return defaultValue
+	}
+	return parsedValue
 }

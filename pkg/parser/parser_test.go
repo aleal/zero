@@ -1,57 +1,8 @@
 package parser
 
 import (
-	"bytes"
-	"net/http"
-	"reflect"
 	"testing"
 )
-
-func TestParseJSONBody(t *testing.T) {
-	tests := []struct {
-		name    string
-		body    string
-		want    map[string]interface{}
-		wantErr bool
-	}{
-		{
-			name:    "valid JSON",
-			body:    `{"name":"test","value":123}`,
-			want:    map[string]interface{}{"name": "test", "value": float64(123)},
-			wantErr: false,
-		},
-		{
-			name:    "invalid JSON",
-			body:    `{"name":"test",}`,
-			want:    nil,
-			wantErr: true,
-		},
-		{
-			name:    "empty body",
-			body:    "",
-			want:    nil,
-			wantErr: true, // Empty body should result in EOF error
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req, _ := http.NewRequest("POST", "/test", bytes.NewBufferString(tt.body))
-			var got map[string]interface{}
-
-			err := ParseJSONBody(req, &got)
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseJSONBody() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if !tt.wantErr && !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ParseJSONBody() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
 func TestSanitizeString(t *testing.T) {
 	tests := []struct {

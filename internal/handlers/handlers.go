@@ -3,11 +3,11 @@
 package handlers
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/aleal/zero/pkg/metadata"
 	"github.com/aleal/zero/pkg/request"
 	"github.com/aleal/zero/pkg/response"
 )
@@ -15,11 +15,13 @@ import (
 // HealthCheckHandler returns a health check response
 func HealthCheckHandler() request.Handler {
 	var start = time.Now()
-	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		uptime := time.Since(start).Truncate(time.Second)
+
 		response.WriteJSON(w, http.StatusOK, map[string]any{
 			"service": "zero",
-			"version": "0.0.1",
-			"uptime":  fmt.Sprintf("%v", time.Since(start)),
+			"version": metadata.GetVersion(),
+			"uptime":  fmt.Sprintf("%v", uptime),
 		})
 	}
 }
