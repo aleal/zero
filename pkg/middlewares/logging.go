@@ -8,35 +8,8 @@ import (
 	"github.com/aleal/zero/pkg/log"
 	"github.com/aleal/zero/pkg/request"
 	"github.com/aleal/zero/pkg/requestid"
+	"github.com/aleal/zero/pkg/response"
 )
-
-type responseWriter struct {
-	http.ResponseWriter
-	statusCode int
-	written    bool
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	if rw.written {
-		return
-	}
-	rw.statusCode = code
-	rw.written = true
-	rw.ResponseWriter.WriteHeader(code)
-}
-
-func (rw *responseWriter) Write(b []byte) (int, error) {
-	if !rw.written {
-		rw.WriteHeader(http.StatusOK) // Default to 200 if Write is called first
-	}
-	return rw.ResponseWriter.Write(b)
-}
-
-// Unwrap returns the underlying ResponseWriter so http.NewResponseController
-// can reach Flusher, Hijacker, etc.
-func (rw *responseWriter) Unwrap() http.ResponseWriter {
-	return rw.ResponseWriter
-}
 
 // Logging middleware logs request details
 func Logging(logger *slog.Logger) Middleware {
@@ -55,10 +28,10 @@ func Logging(logger *slog.Logger) Middleware {
 			rctx := requestid.WithContext(r.Context(), rid)
 			rctx = log.SetLoggerToContext(rctx, logger)
 			r = r.WithContext(rctx)
-			rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK, written: false}
-			next(rw, r)
+			next(w, r)
 			duration := time.Since(start).Microseconds()
-			logger.Info("Request completed", slog.Int64("durationMicros", duration), slog.Int("statusCode", rw.statusCode))
+			statusCode := response.StatusCode(w)
+			logger.Info("Request completed", slog.Int64("durationMicros", duration), slog.Int("statusCode", statusCode))
 		}
 	}
 }

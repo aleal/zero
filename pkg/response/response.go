@@ -9,6 +9,34 @@ import (
 	"net/http"
 )
 
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+	written    bool
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	if rw.written {
+		return
+	}
+	rw.statusCode = code
+	rw.written = true
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	if !rw.written {
+		rw.WriteHeader(http.StatusOK) // Default to 200 if Write is called first
+	}
+	return rw.ResponseWriter.Write(b)
+}
+
+// Unwrap returns the underlying ResponseWriter so http.NewResponseController
+// can reach Flusher, Hijacker, etc.
+func (rw *responseWriter) Unwrap() http.ResponseWriter {
+	return rw.ResponseWriter
+}
+
 // WriteJSON writes a JSON response with the given status code and data
 func WriteJSON(w http.ResponseWriter, statusCode int, data any) {
 	if jsonData, err := json.Marshal(data); err == nil {
@@ -46,4 +74,11 @@ func WriteErrorMsg(w http.ResponseWriter, statusCode int, message string) {
 // SetHeader sets a response header with the given key and value
 func SetHeader(w http.ResponseWriter, key, value string) {
 	w.Header().Set(key, value)
+}
+
+func StatusCode(w http.ResponseWriter) int {
+	if rw, ok := w.(*responseWriter); ok {
+		return rw.statusCode
+	}
+	return http.StatusOK
 }
