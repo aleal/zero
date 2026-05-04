@@ -184,18 +184,19 @@ func (z *zero) registerMethodHandler(pattern, method string, handler request.Han
 func (z *zero) methodRouter(pattern string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		handlers, exists := z.handlers[pattern]
+		rw := response.Wrap(w)
 		if !exists {
-			http.NotFound(w, r)
+			http.NotFound(rw, r)
 			return
 		}
 
 		handler, methodExists := handlers[r.Method]
 		if !methodExists {
-			methodNotAllowed(handlers, w, r)
+			methodNotAllowed(handlers, rw, r)
 			return
 		}
 
-		handler(w, r)
+		handler(rw, r)
 	}
 }
 

@@ -9,13 +9,16 @@ import (
 	"net/http"
 )
 
-type responseWriter struct {
+// Writer is a wrapper around http.ResponseWriter that provides a status code and a written flag
+// It ensures that the response header is only written once
+type Writer struct {
 	http.ResponseWriter
 	statusCode int
 	written    bool
 }
 
-func (rw *responseWriter) WriteHeader(code int) {
+// WriteHeader writes the status code to the response header
+func (rw *Writer) WriteHeader(code int) {
 	if rw.written {
 		return
 	}
@@ -24,17 +27,29 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
-func (rw *responseWriter) Write(b []byte) (int, error) {
+// Write writes the given bytes to the response body
+// It ensures that the response header is only written once
+func (rw *Writer) Write(b []byte) (int, error) {
 	if !rw.written {
 		rw.WriteHeader(http.StatusOK) // Default to 200 if Write is called first
 	}
 	return rw.ResponseWriter.Write(b)
 }
 
-// Unwrap returns the underlying ResponseWriter so http.NewResponseController
+// Unwrap returns the underlying http.ResponseWriter so http.NewResponseController
 // can reach Flusher, Hijacker, etc.
-func (rw *responseWriter) Unwrap() http.ResponseWriter {
+func (rw *Writer) Unwrap() http.ResponseWriter {
 	return rw.ResponseWriter
+}
+
+// Wrap wraps the given http.ResponseWriter in a Writer
+// If the http.ResponseWriter is already a Writer, it returns it
+// Otherwise, it creates a new Writer
+func Wrap(w http.ResponseWriter) *Writer {
+	if rw, ok := w.(*Writer); ok {
+		return rw
+	}
+	return &Writer{ResponseWriter: w, statusCode: http.StatusOK, written: false}
 }
 
 // WriteJSON writes a JSON response with the given status code and data
@@ -77,7 +92,7 @@ func SetHeader(w http.ResponseWriter, key, value string) {
 }
 
 func StatusCode(w http.ResponseWriter) int {
-	if rw, ok := w.(*responseWriter); ok {
+	if rw, ok := w.(*Writer); ok {
 		return rw.statusCode
 	}
 	return http.StatusOK
