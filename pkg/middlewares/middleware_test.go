@@ -12,7 +12,7 @@ import (
 func TestChain(t *testing.T) {
 	// Create a simple handler
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	// Create middleware that adds a header
@@ -64,7 +64,7 @@ func TestChain(t *testing.T) {
 func TestChainWithNoMiddlewares(t *testing.T) {
 	// Create a simple handler
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	// Chain with no middlewares
@@ -94,7 +94,7 @@ func TestChainOrder(t *testing.T) {
 	// Create a handler that records execution
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		executionOrder = append(executionOrder, "handler")
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	// Create middleware that records execution order
@@ -152,7 +152,7 @@ func TestChainOrder(t *testing.T) {
 
 func BenchmarkChain(b *testing.B) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	middleware := func(next request.Handler) request.Handler {

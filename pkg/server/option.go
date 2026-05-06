@@ -71,7 +71,7 @@ func WithMaxUploadedFileSize(size int64) Option {
 // It applies the logging middleware to the server with the given logger
 func WithLogging(logger *slog.Logger, priority middlewares.MiddlewarePriority) Option {
 	return func(z *zero) {
-		z.ctx = log.SetLoggerToContext(z.ctx, logger)
+		z.ctx = log.SetToContext(z.ctx, logger)
 		z.middlewares = middlewares.Append(z.middlewares, middlewares.Logging(logger), priority)
 	}
 }
@@ -102,9 +102,9 @@ func WithMiddleware(middleware middlewares.Middleware, priority middlewares.Midd
 
 // WithDefaultLogging applies the default logging middlewares to the server
 // It applies the logging middleware to the server with the default logger
-// It is equivalent to calling WithLogging(log.NewLogger(), middlewares.MiddlewarePriorityLow)
+// It is equivalent to calling WithLogging(log.New(), middlewares.MiddlewarePriorityLow)
 func WithDefaultLogging() Option {
-	return WithLogging(log.NewLogger(), middlewares.MiddlewarePriorityLow)
+	return WithLogging(log.New(), middlewares.MiddlewarePriorityLow)
 }
 
 // WithDefaultCORS applies the default CORS middleware to the server

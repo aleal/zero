@@ -54,7 +54,7 @@ func TestCORS(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := func(w http.ResponseWriter, r *http.Request) {
-				response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
+				response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "success"})
 			}
 
 			corsHandler := CORS(tt.allowedOrigins)(handler)
@@ -101,7 +101,7 @@ func TestCORS(t *testing.T) {
 
 func TestCORSCredentialsOnlyForExplicitOrigins(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	// Wildcard should NOT set credentials
@@ -133,7 +133,7 @@ func TestCORSCredentialsOnlyForExplicitOrigins(t *testing.T) {
 
 func TestCORSMaxAge(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	corsHandler := CORS([]string{"https://example.com"})(handler)
@@ -151,7 +151,7 @@ func TestCORSMaxAge(t *testing.T) {
 
 func TestCORSWithPreflight(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	corsHandler := CORS([]string{"https://example.com"})(handler)
@@ -186,7 +186,7 @@ func TestCORSWithPreflight(t *testing.T) {
 
 func BenchmarkCORS(b *testing.B) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	corsHandler := CORS([]string{"https://example.com"})(handler)

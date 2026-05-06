@@ -19,33 +19,33 @@ func TestIntegrationServer(t *testing.T) {
 	z := server.New(ctx)
 
 	z.Get("/test", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "GET success"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "GET success"})
 	})
 
 	z.Post("/test", func(w http.ResponseWriter, r *http.Request) {
 		var data map[string]any
 		if err := parser.ParseJSONBody(r.Body, &data); err != nil {
-			response.WriteError(w, http.StatusBadRequest, err)
+			response.WriteError(r.Context(), w, http.StatusBadRequest, err)
 			return
 		}
-		response.WriteJSON(w, http.StatusCreated, map[string]any{
+		response.WriteJSON(r.Context(), w, http.StatusCreated, map[string]any{
 			"message": "POST success",
 			"data":    data,
 		})
 	})
 
 	z.Put("/test", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "PUT success"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "PUT success"})
 	})
 
 	z.Delete("/test", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "DELETE success"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "DELETE success"})
 	})
 
 	z.Get("/query", func(w http.ResponseWriter, r *http.Request) {
 		name := request.GetQueryParamOrDefault(r, "name", "default")
 		age := request.GetQueryParamOrDefault(r, "age", "0")
-		response.WriteJSON(w, http.StatusOK, map[string]string{
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{
 			"name": name,
 			"age":  age,
 		})
@@ -164,7 +164,7 @@ func BenchmarkIntegrationRequests(b *testing.B) {
 	z := server.New(ctx)
 
 	z.Get("/test", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "success"})
 	})
 
 	testServer := httptest.NewServer(z.Handler())

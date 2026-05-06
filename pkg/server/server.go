@@ -207,5 +207,5 @@ func methodNotAllowed(handlers map[string]request.Handler, w http.ResponseWriter
 		allowedMethods = append(allowedMethods, method)
 	}
 	w.Header().Set("Allow", strings.Join(allowedMethods, ", "))
-	response.WriteError(w, http.StatusMethodNotAllowed, fmt.Errorf("method %s not allowed", r.Method))
+	response.WriteError(r.Context(), w, http.StatusMethodNotAllowed, fmt.Errorf("method %s not allowed", r.Method))
 }

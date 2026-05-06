@@ -13,7 +13,7 @@ import (
 
 func TestRecovery(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	recoveryHandler := Recovery()(handler)
@@ -23,7 +23,7 @@ func TestRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx := log.SetLoggerToContext(req.Context(), log.NewLogger())
+	ctx := log.SetToContext(req.Context(), log.New())
 	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()
@@ -51,7 +51,7 @@ func TestRecoveryWithPanic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx := log.SetLoggerToContext(req.Context(), log.NewLogger())
+	ctx := log.SetToContext(req.Context(), log.New())
 	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()
@@ -112,7 +112,7 @@ func TestRecoveryWithDifferentPanicTypes(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			ctx := log.SetLoggerToContext(req.Context(), log.NewLogger())
+			ctx := log.SetToContext(req.Context(), log.New())
 			req = req.WithContext(ctx)
 
 			w := httptest.NewRecorder()
@@ -146,7 +146,7 @@ func TestRecoveryWithDifferentMethods(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			ctx := log.SetLoggerToContext(req.Context(), log.NewLogger())
+			ctx := log.SetToContext(req.Context(), log.New())
 			req = req.WithContext(ctx)
 
 			w := httptest.NewRecorder()
@@ -161,13 +161,13 @@ func TestRecoveryWithDifferentMethods(t *testing.T) {
 
 func BenchmarkRecovery(b *testing.B) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "success"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "success"})
 	}
 
 	recoveryHandler := Recovery()(handler)
 	req, _ := http.NewRequest("GET", "/test", nil)
 	ctx := context.Background()
-	ctx = log.SetLoggerToContext(ctx, log.NewLogger())
+	ctx = log.SetToContext(ctx, log.New())
 	req = req.WithContext(ctx)
 
 	b.ResetTimer()
@@ -185,7 +185,7 @@ func BenchmarkRecoveryWithPanic(b *testing.B) {
 	recoveryHandler := Recovery()(handler)
 	req, _ := http.NewRequest("GET", "/test", nil)
 	ctx := context.Background()
-	ctx = log.SetLoggerToContext(ctx, log.NewLogger())
+	ctx = log.SetToContext(ctx, log.New())
 	req = req.WithContext(ctx)
 
 	b.ResetTimer()

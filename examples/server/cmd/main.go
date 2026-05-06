@@ -38,7 +38,7 @@ func setupRoutes(zero server.Zero) {
 		rctx := r.Context()
 		logger := zerolog.FromContext(rctx)
 		logger.Info("Hello from Zero!")
-		response.WriteJSON(w, http.StatusOK, map[string]any{
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]any{
 			"message": "Hello from Zero!",
 			"time":    time.Now().UTC().Format(time.RFC3339),
 		})
@@ -51,12 +51,12 @@ func setupRoutes(zero server.Zero) {
 			{"id": 2, "name": "Bob", "email": "bob@example.com"},
 			{"id": 3, "name": "Charlie", "email": "charlie@example.com"},
 		}
-		response.WriteJSON(w, http.StatusOK, users)
+		response.WriteJSON(r.Context(), w, http.StatusOK, users)
 	})
 
 	zero.Get("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
 		// In a real application, you would parse the ID from the URL
-		response.WriteJSON(w, http.StatusOK, map[string]any{
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]any{
 			"id":    request.GetPathParam(r, "id"),
 			"name":  "Alice",
 			"email": "alice@example.com",
@@ -70,12 +70,12 @@ func setupRoutes(zero server.Zero) {
 		}
 
 		if err := parser.ParseJSONBody(r.Body, &user); err != nil {
-			response.WriteErrorMsg(w, http.StatusBadRequest, "Invalid JSON")
+			response.WriteErrorMsg(r.Context(), w, http.StatusBadRequest, "Invalid JSON")
 			return
 		}
 
 		// In a real application, you would save the user to a database
-		response.WriteJSON(w, http.StatusCreated, map[string]any{
+		response.WriteJSON(r.Context(), w, http.StatusCreated, map[string]any{
 			"id":    4,
 			"name":  user.Name,
 			"email": user.Email,
@@ -83,7 +83,7 @@ func setupRoutes(zero server.Zero) {
 	})
 
 	zero.Get("/status", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]any{
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]any{
 			"status":    "running",
 			"uptime":    "1h 23m 45s",
 			"requests":  1234,

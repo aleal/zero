@@ -1,6 +1,7 @@
 package response
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -39,7 +40,7 @@ func TestWriteJSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			WriteJSON(w, tt.statusCode, tt.data)
+			WriteJSON(context.Background(), w, tt.statusCode, tt.data)
 
 			// Check status code
 			if w.Code != tt.statusCode {
@@ -75,7 +76,7 @@ func TestWriteJSONWithMarshalingError(t *testing.T) {
 
 	// Create a channel, which cannot be marshaled to JSON
 	unmarshallableData := make(chan int)
-	WriteJSON(w, http.StatusOK, unmarshallableData)
+	WriteJSON(context.Background(), w, http.StatusOK, unmarshallableData)
 
 	// Should return 500 Internal Server Error when marshaling fails
 	if w.Code != http.StatusInternalServerError {
@@ -93,7 +94,7 @@ func TestWrite(t *testing.T) {
 	t.Run("write with custom content type", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		data := []byte("hello world")
-		Write(w, "text/plain", http.StatusOK, data)
+		Write(context.Background(), w, "text/plain", http.StatusOK, data)
 
 		if w.Code != http.StatusOK {
 			t.Errorf("Write() status code = %v, want %v", w.Code, http.StatusOK)
@@ -115,7 +116,7 @@ func TestWriteError(t *testing.T) {
 	t.Run("write error response", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		err := http.ErrServerClosed
-		WriteError(w, http.StatusInternalServerError, err)
+		WriteError(context.Background(), w, http.StatusInternalServerError, err)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("WriteError() status code = %v, want %v", w.Code, http.StatusInternalServerError)
@@ -132,7 +133,7 @@ func TestWriteError(t *testing.T) {
 func TestWriteErrorMsg(t *testing.T) {
 	t.Run("write error message", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		WriteErrorMsg(w, http.StatusBadRequest, "Invalid input")
+		WriteErrorMsg(context.Background(), w, http.StatusBadRequest, "Invalid input")
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("WriteErrorMsg() status code = %v, want %v", w.Code, http.StatusBadRequest)
@@ -148,7 +149,7 @@ func TestInternalServerError(t *testing.T) {
 	t.Run("write internal server error", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		err := http.ErrServerClosed
-		InternalServerError(w, err)
+		InternalServerError(context.Background(), w, err)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("InternalServerError() status code = %v, want %v", w.Code, http.StatusInternalServerError)

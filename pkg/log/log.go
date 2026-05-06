@@ -15,7 +15,7 @@ var loggerContextKey = contextKey{}
 // The logger is configured to log to stdout in JSON format
 // The log level is set to the value of the ZERO_LOG_LEVEL environment variable
 // If the ZERO_LOG_LEVEL environment variable is not set, the log level is set to INFO
-func NewLogger() *slog.Logger {
+func New() *slog.Logger {
 	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: getLevel(),
 	}))
@@ -27,12 +27,20 @@ func FromContext(rctx context.Context) *slog.Logger {
 	if l, ok := rctx.Value(loggerContextKey).(*slog.Logger); ok {
 		return l
 	}
-	return NewLogger()
+	return New()
 }
 
-// SetLoggerToContext sets the logger to the context
-func SetLoggerToContext(ctx context.Context, logger *slog.Logger) context.Context {
+// SetToContext sets the logger to the context
+func SetToContext(ctx context.Context, logger *slog.Logger) context.Context {
 	return context.WithValue(ctx, loggerContextKey, logger)
+}
+
+// WithArgs adds the given arguments to the logger in the context
+func WithArgs(ctx context.Context, args ...any) context.Context {
+	if len(args) > 0 {
+		return SetToContext(ctx, FromContext(ctx).With(args...))
+	}
+	return ctx
 }
 
 // getLevel gets the log level from the environment variable

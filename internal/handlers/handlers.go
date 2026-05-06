@@ -18,7 +18,7 @@ func HealthCheckHandler() request.Handler {
 	return func(w http.ResponseWriter, r *http.Request) {
 		uptime := time.Since(start).Truncate(time.Second)
 
-		response.WriteJSON(w, http.StatusOK, map[string]any{
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]any{
 			"service": "zero",
 			"version": metadata.GetVersion(),
 			"uptime":  fmt.Sprintf("%v", uptime),

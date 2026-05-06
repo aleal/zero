@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewLogger(t *testing.T) {
-	logger := NewLogger()
+	logger := New()
 	if logger == nil {
 		t.Error("NewLogger() returned nil")
 	}
@@ -15,8 +15,8 @@ func TestNewLogger(t *testing.T) {
 
 func TestFromContext(t *testing.T) {
 	ctx := context.Background()
-	logger := NewLogger()
-	ctxWithLogger := SetLoggerToContext(ctx, logger)
+	logger := New()
+	ctxWithLogger := SetToContext(ctx, logger)
 
 	retrievedLogger := FromContext(ctxWithLogger)
 	if retrievedLogger == nil {
@@ -34,9 +34,9 @@ func TestFromContextWithoutLogger(t *testing.T) {
 
 func TestSetLoggerToContext(t *testing.T) {
 	ctx := context.Background()
-	logger := NewLogger()
+	logger := New()
 
-	ctxWithLogger := SetLoggerToContext(ctx, logger)
+	ctxWithLogger := SetToContext(ctx, logger)
 	if ctxWithLogger == nil {
 		t.Error("SetLoggerToContext() returned nil")
 	}
@@ -48,7 +48,7 @@ func TestSetLoggerToContext(t *testing.T) {
 }
 
 func TestLoggerMethods(t *testing.T) {
-	logger := NewLogger()
+	logger := New()
 
 	logger.Debug("Debug message")
 	logger.Info("Info message")
@@ -80,7 +80,7 @@ func TestGetLevelInvalid(t *testing.T) {
 func TestLoggerWithCustomLevel(t *testing.T) {
 	t.Setenv("ZERO_LOG_LEVEL", "ERROR")
 
-	logger := NewLogger()
+	logger := New()
 
 	logger.Debug("Debug message")
 	logger.Info("Info message")
@@ -102,7 +102,7 @@ func TestLoggerLevelMethodsWithCustomLevels(t *testing.T) {
 		t.Run(tc.level, func(t *testing.T) {
 			t.Setenv("ZERO_LOG_LEVEL", tc.level)
 
-			logger := NewLogger()
+			logger := New()
 
 			logger.Debug("Debug message")
 			logger.Info("Info message")
@@ -112,17 +112,17 @@ func TestLoggerLevelMethodsWithCustomLevels(t *testing.T) {
 	}
 }
 
-func BenchmarkNewLogger(b *testing.B) {
+func BenchmarkNew(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		NewLogger()
+		New()
 	}
 }
 
 func BenchmarkLoggerInfo(b *testing.B) {
-	logger := NewLogger()
+	logger := New()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		logger.Info("Benchmark message", "i", i)
+		logger.Info("Benchmark message", slog.Int("i", i))
 	}
 }

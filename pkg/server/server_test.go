@@ -45,10 +45,10 @@ func TestNewServerWithBadEnv(t *testing.T) {
 func TestMethodRouterRoundTrip(t *testing.T) {
 	srv := New(context.Background())
 	srv.Get("/items", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"action": "list"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"action": "list"})
 	})
 	srv.Post("/items", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusCreated, map[string]string{"action": "create"})
+		response.WriteJSON(r.Context(), w, http.StatusCreated, map[string]string{"action": "create"})
 	})
 
 	ts := httptest.NewServer(srv.Handler())
@@ -87,10 +87,10 @@ func TestMethodRouterRoundTrip(t *testing.T) {
 func TestMethodNotAllowedHasAllowHeader(t *testing.T) {
 	srv := New(context.Background())
 	srv.Get("/resource", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, nil)
+		response.WriteJSON(r.Context(), w, http.StatusOK, nil)
 	})
 	srv.Post("/resource", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusCreated, nil)
+		response.WriteJSON(r.Context(), w, http.StatusCreated, nil)
 	})
 
 	ts := httptest.NewServer(srv.Handler())
@@ -114,7 +114,7 @@ func TestMethodNotAllowedHasAllowHeader(t *testing.T) {
 func TestHandlerReturnsWorkingMux(t *testing.T) {
 	srv := New(context.Background())
 	srv.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"pong": "true"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"pong": "true"})
 	})
 
 	rec := httptest.NewRecorder()
@@ -178,19 +178,19 @@ func TestShutdown(t *testing.T) {
 func TestMultipleMethodsSamePattern(t *testing.T) {
 	srv := New(context.Background())
 	srv.Get("/api/data", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"method": "GET"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"method": "GET"})
 	})
 	srv.Post("/api/data", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusCreated, map[string]string{"method": "POST"})
+		response.WriteJSON(r.Context(), w, http.StatusCreated, map[string]string{"method": "POST"})
 	})
 	srv.Put("/api/data", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"method": "PUT"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"method": "PUT"})
 	})
 	srv.Delete("/api/data", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusNoContent, nil)
+		response.WriteJSON(r.Context(), w, http.StatusNoContent, nil)
 	})
 	srv.Patch("/api/data", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"method": "PATCH"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"method": "PATCH"})
 	})
 
 	ts := httptest.NewServer(srv.Handler())
@@ -221,7 +221,7 @@ func TestMultipleMethodsSamePattern(t *testing.T) {
 func TestCustomHandleMethod(t *testing.T) {
 	srv := New(context.Background())
 	srv.Handle("/custom", "CUSTOM", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"method": "CUSTOM"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"method": "CUSTOM"})
 	})
 
 	ts := httptest.NewServer(srv.Handler())
@@ -241,7 +241,7 @@ func TestCustomHandleMethod(t *testing.T) {
 func TestPatternNormalization(t *testing.T) {
 	srv := New(context.Background())
 	srv.Get("no-leading-slash", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"ok": "true"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"ok": "true"})
 	})
 
 	ts := httptest.NewServer(srv.Handler())
@@ -267,7 +267,7 @@ func BenchmarkServerMethodRegistration(b *testing.B) {
 	server := New(context.Background())
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(w, http.StatusOK, map[string]string{"message": "test"})
+		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"message": "test"})
 	}
 
 	b.ResetTimer()

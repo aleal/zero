@@ -26,7 +26,7 @@ func Logging(logger *slog.Logger) Middleware {
 			)
 			logger.Info("Request started")
 			rctx := requestid.WithContext(r.Context(), rid)
-			rctx = log.SetLoggerToContext(rctx, logger)
+			rctx = log.SetToContext(rctx, logger)
 			r = r.WithContext(rctx)
 			next(w, r)
 			duration := time.Since(start).Microseconds()
