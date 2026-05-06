@@ -45,7 +45,7 @@ func main() {
     srv := zero.New(ctx, zero.WithDefaultMiddlewares())
 
     srv.Get("/hello", func(w http.ResponseWriter, r *http.Request) {
-        response.WriteJSON(w, http.StatusOK, map[string]string{
+        response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{
             "message": "Hello from Zero!",
         })
     })
@@ -248,12 +248,26 @@ type Builder interface {
 
 ## Response Utilities
 
+All write helpers take `context.Context` first. They use `pkg/log` so failures and error responses are logged with the same structured logger as the request (including `requestId` when default logging middleware is on). Pass `r.Context()` from handlers.
+
 ```go
-response.WriteJSON(w, http.StatusOK, data)
-response.WriteError(w, http.StatusBadRequest, err)
-response.WriteErrorMsg(w, http.StatusNotFound, "not found")
+response.WriteJSON(r.Context(), w, http.StatusOK, data)
+response.Write(r.Context(), w, "text/plain", http.StatusOK, []byte("ok"))
+response.WriteError(r.Context(), w, http.StatusBadRequest, err)
+response.WriteErrorMsg(r.Context(), w, http.StatusNotFound, "not found")
+response.InternalServerError(r.Context(), w, err) // generic message to client, err logged
 response.SetHeader(w, "X-Custom-Header", "value")
+response.StatusCode(w) // status from *response.Writer (used by the logging middleware)
 ```
+
+Routes registered on `server.Zero` use a wrapped writer so status codes from `pkg/response` match what the logging middleware records.
+
+## Structured logging (`pkg/log`)
+
+- `log.New()` — JSON `slog` logger to stdout; level from `ZERO_LOG_LEVEL`
+- `log.FromContext(ctx)` — logger from context, or a fresh default if none is set
+- `log.SetToContext(ctx, logger)` — attach a logger to context (default logging middleware does this per request)
+- `log.WithArgs(ctx, keyValues...)` — derive a context with extra structured fields on the context logger
 
 ## Request IDs
 
@@ -305,7 +319,7 @@ Use `Handler()` in tests to exercise the actual server routing:
 func TestAPI(t *testing.T) {
     srv := server.New(context.Background())
     srv.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
-        response.WriteJSON(w, http.StatusOK, map[string]string{"pong": "ok"})
+        response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"pong": "ok"})
     })
 
     ts := httptest.NewServer(srv.Handler())
