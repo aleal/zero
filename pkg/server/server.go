@@ -154,7 +154,7 @@ func (z *zero) Start() error {
 // normalizePattern normalizes the pattern for the given pattern
 func (z *zero) normalizePattern(pattern string) string {
 	// Ensure leading slash, preserve trailing slash (Go 1.22+ subtree patterns)
-	return "/" + strings.TrimLeft(pattern, "/")
+	return "/" + strings.Trim(pattern, "/")
 }
 
 // registerMethodHandler registers a handler for a specific HTTP method and pattern and applies the middlewares to the handler
