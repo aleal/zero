@@ -238,25 +238,6 @@ func TestCustomHandleMethod(t *testing.T) {
 	}
 }
 
-func TestPatternNormalization(t *testing.T) {
-	srv := New(context.Background())
-	srv.Get("no-leading-slash", func(w http.ResponseWriter, r *http.Request) {
-		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]string{"ok": "true"})
-	})
-
-	ts := httptest.NewServer(srv.Handler())
-	defer ts.Close()
-
-	resp, err := http.Get(ts.URL + "/no-leading-slash")
-	if err != nil {
-		t.Fatalf("GET: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("status = %d, want 200", resp.StatusCode)
-	}
-}
-
 func BenchmarkServerCreation(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		New(context.Background())

@@ -34,7 +34,7 @@ func setupRoutes(zero server.Zero) {
 	// server.Get("/health", handlers.HealthCheckHandler)
 
 	// API routes
-	zero.Get("/hello", func(w http.ResponseWriter, r *http.Request) {
+	zero.Get("/hello/{$}", func(w http.ResponseWriter, r *http.Request) {
 		rctx := r.Context()
 		logger := zerolog.FromContext(rctx)
 		logger.Info("Hello from Zero!")
@@ -45,7 +45,7 @@ func setupRoutes(zero server.Zero) {
 		logger.Info("Done!")
 	})
 
-	zero.Get("/users", func(w http.ResponseWriter, r *http.Request) {
+	zero.Get("/users/{$}", func(w http.ResponseWriter, r *http.Request) {
 		users := []map[string]any{
 			{"id": 1, "name": "Alice", "email": "alice@example.com"},
 			{"id": 2, "name": "Bob", "email": "bob@example.com"},
@@ -63,7 +63,7 @@ func setupRoutes(zero server.Zero) {
 		})
 	})
 
-	zero.Post("/users", func(w http.ResponseWriter, r *http.Request) {
+	zero.Post("/users/{$}", func(w http.ResponseWriter, r *http.Request) {
 		var user struct {
 			Name  string `json:"name"`
 			Email string `json:"email"`
@@ -82,7 +82,7 @@ func setupRoutes(zero server.Zero) {
 		})
 	})
 
-	zero.Get("/status", func(w http.ResponseWriter, r *http.Request) {
+	zero.Get("/status/{$}", func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(r.Context(), w, http.StatusOK, map[string]any{
 			"status":    "running",
 			"uptime":    "1h 23m 45s",
@@ -93,12 +93,12 @@ func setupRoutes(zero server.Zero) {
 	})
 
 	// Static file serving example
-	zero.Get("/static", func(w http.ResponseWriter, r *http.Request) {
+	zero.Get("/static/{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "examples/server/static/index.html")
 	})
 
 	// 404 handler for unmatched routes
-	zero.Get("/", func(w http.ResponseWriter, r *http.Request) {
+	zero.Get("/{$}", func(w http.ResponseWriter, r *http.Request) {
 		// Serve a simple HTML page
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(`
@@ -115,7 +115,7 @@ func setupRoutes(zero server.Zero) {
 </head>
 <body>
     <div class="container">
-        <h1>🚀 Zero HTTP Server</h1>
+        <h1>&#x1F680; Zero HTTP Server</h1>
         <p>A simple, lean, and blazingly fast HTTP server library built with pure Go.</p>
         
         <h2>Available Endpoints:</h2>

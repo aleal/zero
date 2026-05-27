@@ -151,15 +151,8 @@ func (z *zero) Start() error {
 	return nil
 }
 
-// normalizePattern normalizes the pattern for the given pattern
-func (z *zero) normalizePattern(pattern string) string {
-	// Ensure leading slash, preserve trailing slash (Go 1.22+ subtree patterns)
-	return "/" + strings.Trim(pattern, "/")
-}
-
 // registerMethodHandler registers a handler for a specific HTTP method and pattern and applies the middlewares to the handler
 func (z *zero) registerMethodHandler(pattern, method string, handler request.Handler, rmiddlewares ...middlewares.Middleware) {
-	pattern = z.normalizePattern(pattern)
 
 	logger := log.FromContext(z.ctx)
 	logger.Info("Registering handler", slog.String("method", method), slog.String("pattern", pattern))
